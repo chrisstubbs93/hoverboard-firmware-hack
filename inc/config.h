@@ -49,8 +49,8 @@
 
 // ############################### SERIAL DEBUG ###############################
 
-//#define DEBUG_SERIAL_USART2       // left sensor board cable, disable if ADC or PPM is used!
-#define DEBUG_SERIAL_USART3         // right sensor board cable, disable if I2C (nunchuck or lcd) is used!
+#define DEBUG_SERIAL_USART2       // left sensor board cable, disable if ADC or PPM is used!
+//#define DEBUG_SERIAL_USART3         // right sensor board cable, disable if I2C (nunchuck or lcd) is used!
 
 //#define DEBUG_SERIAL_SERVOTERM
 //#define DEBUG_SERIAL_ASCII          // "1:345 2:1337 3:0 4:0 5:0 6:0 7:0 8:0\r\n"
@@ -61,8 +61,8 @@
 // ############################### CONTROL METHOD ###############################
 
 // ###### CONTROL VIA UART (serial) ######
-//#define CONTROL_SERIAL_NAIVE_USART2               // left sensor board cable, disable if ADC or PPM is used!
-#define CONTROL_SERIAL_NAIVE_USART3               // right sensor board cable, disable if I2C (nunchuck or lcd) is used!
+#define CONTROL_SERIAL_NAIVE_USART2               // left sensor board cable, disable if ADC or PPM is used!
+//#define CONTROL_SERIAL_NAIVE_USART3               // right sensor board cable, disable if I2C (nunchuck or lcd) is used!
 
 // ###### CONTROL VIA RC REMOTE ######
 // left sensor board cable. Channel 1: steering, Channel 2: speed.
@@ -126,7 +126,7 @@
 // - speedR and speedL: normal driving -1000 to 1000
 // - weakr and weakl: field weakening for extra boost at high speed (speedR > 700 and speedL > 700). 0 to ~400
 
-#define SPEED_IS_KMH		//ROBO spped is 10*km/h so 60 would be 6.0 km/h
+//#define SPEED_IS_KMH		//ROBO spped is 10*km/h so 60 would be 6.0 km/h
 	// better only use with digital communication like uart 
 #define MAX_RECUPERATION 3.0  //ROBO increase gas when more then 3.0 amps go back into the battery
   // ny chain drive is to loose to take more then 3 Amps :-/

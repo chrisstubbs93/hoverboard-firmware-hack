@@ -1,0 +1,582 @@
+ARM GAS  /tmp/cctX7tPA.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.eabi_attribute 20, 1
+   3              		.eabi_attribute 21, 1
+   4              		.eabi_attribute 23, 3
+   5              		.eabi_attribute 24, 1
+   6              		.eabi_attribute 25, 1
+   7              		.eabi_attribute 26, 1
+   8              		.eabi_attribute 30, 1
+   9              		.eabi_attribute 34, 1
+  10              		.eabi_attribute 18, 4
+  11              		.file	"comms.c"
+  12              		.text
+  13              	.Ltext0:
+  14              		.cfi_sections	.debug_frame
+  15              		.section	.text.setScopeChannel,"ax",%progbits
+  16              		.align	1
+  17              		.global	setScopeChannel
+  18              		.syntax unified
+  19              		.thumb
+  20              		.thumb_func
+  21              		.fpu softvfp
+  23              	setScopeChannel:
+  24              	.LFB66:
+  25              		.file 1 "src/comms.c"
+   1:src/comms.c   **** #include "stm32f1xx_hal.h"
+   2:src/comms.c   **** #include "defines.h"
+   3:src/comms.c   **** #include "setup.h"
+   4:src/comms.c   **** #include "config.h"
+   5:src/comms.c   **** #include "stdio.h"
+   6:src/comms.c   **** #include "string.h"
+   7:src/comms.c   **** #include "comms.h"
+   8:src/comms.c   **** 
+   9:src/comms.c   **** extern UART_HandleTypeDef huart2;
+  10:src/comms.c   **** extern UART_HandleTypeDef huart3;
+  11:src/comms.c   **** 
+  12:src/comms.c   **** #ifdef DEBUG_SERIAL_USART3
+  13:src/comms.c   **** #define UART_DMA_CHANNEL DMA1_Channel2
+  14:src/comms.c   **** extern UART_HandleTypeDef huart3;
+  15:src/comms.c   **** #endif
+  16:src/comms.c   **** 
+  17:src/comms.c   **** #ifdef DEBUG_SERIAL_USART2
+  18:src/comms.c   **** #define UART_DMA_CHANNEL DMA1_Channel7
+  19:src/comms.c   **** extern UART_HandleTypeDef huart2;
+  20:src/comms.c   **** #endif
+  21:src/comms.c   **** 
+  22:src/comms.c   **** 
+  23:src/comms.c   **** volatile uint8_t uart_buf[100];
+  24:src/comms.c   **** volatile int16_t ch_buf[8];
+  25:src/comms.c   **** 
+  26:src/comms.c   **** int debug_out = 1;
+  27:src/comms.c   **** int enablescope = 1;
+  28:src/comms.c   **** 
+  29:src/comms.c   **** //volatile char char_buf[300];
+  30:src/comms.c   **** 
+  31:src/comms.c   **** void setScopeChannel(uint8_t ch, int16_t val) {
+  26              		.loc 1 31 0
+  27              		.cfi_startproc
+ARM GAS  /tmp/cctX7tPA.s 			page 2
+
+
+  28              		@ args = 0, pretend = 0, frame = 0
+  29              		@ frame_needed = 0, uses_anonymous_args = 0
+  30              		@ link register save eliminated.
+  31              	.LVL0:
+  32:src/comms.c   ****   ch_buf[ch] = val;
+  32              		.loc 1 32 0
+  33 0000 014B     		ldr	r3, .L2
+  34 0002 23F81010 		strh	r1, [r3, r0, lsl #1]	@ movhi
+  33:src/comms.c   **** }
+  35              		.loc 1 33 0
+  36 0006 7047     		bx	lr
+  37              	.L3:
+  38              		.align	2
+  39              	.L2:
+  40 0008 00000000 		.word	ch_buf
+  41              		.cfi_endproc
+  42              	.LFE66:
+  44              		.section	.text.consoleScope,"ax",%progbits
+  45              		.align	1
+  46              		.global	consoleScope
+  47              		.syntax unified
+  48              		.thumb
+  49              		.thumb_func
+  50              		.fpu softvfp
+  52              	consoleScope:
+  53              	.LFB67:
+  34:src/comms.c   **** 
+  35:src/comms.c   **** void consoleScope() {
+  54              		.loc 1 35 0
+  55              		.cfi_startproc
+  56              		@ args = 0, pretend = 0, frame = 0
+  57              		@ frame_needed = 0, uses_anonymous_args = 0
+  58              		@ link register save eliminated.
+  36:src/comms.c   ****   if (!enablescope)
+  37:src/comms.c   ****     return;
+  38:src/comms.c   **** 
+  39:src/comms.c   ****     #if defined DEBUG_SERIAL_SERVOTERM && (defined DEBUG_SERIAL_USART2 || defined DEBUG_SERIAL_USAR
+  40:src/comms.c   ****     uart_buf[0] = 0xff;
+  41:src/comms.c   ****     uart_buf[1] = CLAMP(ch_buf[0]+127, 0, 255);
+  42:src/comms.c   ****     uart_buf[2] = CLAMP(ch_buf[1]+127, 0, 255);
+  43:src/comms.c   ****     uart_buf[3] = CLAMP(ch_buf[2]+127, 0, 255);
+  44:src/comms.c   ****     uart_buf[4] = CLAMP(ch_buf[3]+127, 0, 255);
+  45:src/comms.c   ****     uart_buf[5] = CLAMP(ch_buf[4]+127, 0, 255);
+  46:src/comms.c   ****     uart_buf[6] = CLAMP(ch_buf[5]+127, 0, 255);
+  47:src/comms.c   ****     uart_buf[7] = CLAMP(ch_buf[6]+127, 0, 255);
+  48:src/comms.c   ****     uart_buf[8] = CLAMP(ch_buf[7]+127, 0, 255);
+  49:src/comms.c   ****     uart_buf[9] = '\n';
+  50:src/comms.c   **** 
+  51:src/comms.c   ****     if(UART_DMA_CHANNEL->CNDTR == 0) {
+  52:src/comms.c   ****       UART_DMA_CHANNEL->CCR &= ~DMA_CCR_EN;
+  53:src/comms.c   ****       UART_DMA_CHANNEL->CNDTR = 10;
+  54:src/comms.c   ****       UART_DMA_CHANNEL->CMAR  = (uint32_t)uart_buf;
+  55:src/comms.c   ****       UART_DMA_CHANNEL->CCR |= DMA_CCR_EN;
+  56:src/comms.c   ****     }
+  57:src/comms.c   ****   #endif
+  58:src/comms.c   **** 
+  59:src/comms.c   ****   #if defined DEBUG_SERIAL_ASCII && (defined DEBUG_SERIAL_USART2 || defined DEBUG_SERIAL_USART3)
+ARM GAS  /tmp/cctX7tPA.s 			page 3
+
+
+  60:src/comms.c   ****     memset((void*)uart_buf, 0, sizeof(uart_buf));	//ROBO
+  61:src/comms.c   ****     sprintf((void*)uart_buf, "1:%i 2:%i 3:%i 4:%i 5:%i 6:%i 7:%i 8:%i\r\n", ch_buf[0], ch_buf[1], c
+  62:src/comms.c   **** 
+  63:src/comms.c   ****     if(UART_DMA_CHANNEL->CNDTR == 0) {
+  64:src/comms.c   ****       UART_DMA_CHANNEL->CCR &= ~DMA_CCR_EN;
+  65:src/comms.c   ****       UART_DMA_CHANNEL->CNDTR = strlen((char *)uart_buf);	//ROBO
+  66:src/comms.c   ****       UART_DMA_CHANNEL->CMAR  = (uint32_t)uart_buf; 
+  67:src/comms.c   ****       UART_DMA_CHANNEL->CCR |= DMA_CCR_EN;
+  68:src/comms.c   ****     }
+  69:src/comms.c   ****   #endif
+  70:src/comms.c   **** }
+  59              		.loc 1 70 0
+  60 0000 7047     		bx	lr
+  61              		.cfi_endproc
+  62              	.LFE67:
+  64              		.section	.text.consoleLog,"ax",%progbits
+  65              		.align	1
+  66              		.global	consoleLog
+  67              		.syntax unified
+  68              		.thumb
+  69              		.thumb_func
+  70              		.fpu softvfp
+  72              	consoleLog:
+  73              	.LFB68:
+  71:src/comms.c   **** 
+  72:src/comms.c   **** void consoleLog(char *message)
+  73:src/comms.c   **** {
+  74              		.loc 1 73 0
+  75              		.cfi_startproc
+  76              		@ args = 0, pretend = 0, frame = 0
+  77              		@ frame_needed = 0, uses_anonymous_args = 0
+  78              	.LVL1:
+  79 0000 38B5     		push	{r3, r4, r5, lr}
+  80              	.LCFI0:
+  81              		.cfi_def_cfa_offset 16
+  82              		.cfi_offset 3, -16
+  83              		.cfi_offset 4, -12
+  84              		.cfi_offset 5, -8
+  85              		.cfi_offset 14, -4
+  86 0002 0446     		mov	r4, r0
+  74:src/comms.c   **** #ifdef DEBUG_SERIAL_USART2
+  75:src/comms.c   ****     HAL_UART_Transmit_DMA(&huart2, (uint8_t *)message, strlen(message));
+  87              		.loc 1 75 0
+  88 0004 FFF7FEFF 		bl	strlen
+  89              	.LVL2:
+  90 0008 074D     		ldr	r5, .L7
+  91 000a 82B2     		uxth	r2, r0
+  92 000c 2146     		mov	r1, r4
+  93 000e 2846     		mov	r0, r5
+  94 0010 FFF7FEFF 		bl	HAL_UART_Transmit_DMA
+  95              	.LVL3:
+  76:src/comms.c   **** #endif
+  77:src/comms.c   **** 
+  78:src/comms.c   **** #ifdef DEBUG_SERIAL_USART3
+  79:src/comms.c   ****     HAL_UART_Transmit_DMA(&huart3, (uint8_t *)message, strlen(message));
+  80:src/comms.c   **** #endif
+  81:src/comms.c   ****   // TODO: Method to select which input is used for Protocol when both are active
+ARM GAS  /tmp/cctX7tPA.s 			page 4
+
+
+  82:src/comms.c   **** #if defined(SERIAL_USART2_IT) && !defined(READ_SENSOR)
+  83:src/comms.c   ****   USART2_IT_send((unsigned char *)message, strlen(message));
+  84:src/comms.c   **** #elif defined(SERIAL_USART3_IT) && !defined(READ_SENSOR)
+  85:src/comms.c   ****   USART3_IT_send((unsigned char *)message, strlen(message));
+  86:src/comms.c   **** #else
+  87:src/comms.c   ****   HAL_UART_Transmit_DMA(&huart2, (uint8_t *)message, strlen(message));
+  96              		.loc 1 87 0
+  97 0014 2046     		mov	r0, r4
+  98 0016 FFF7FEFF 		bl	strlen
+  99              	.LVL4:
+ 100 001a 82B2     		uxth	r2, r0
+ 101 001c 2146     		mov	r1, r4
+ 102 001e 2846     		mov	r0, r5
+ 103 0020 FFF7FEFF 		bl	HAL_UART_Transmit_DMA
+ 104              	.LVL5:
+  88:src/comms.c   **** #endif
+  89:src/comms.c   **** }
+ 105              		.loc 1 89 0
+ 106 0024 38BD     		pop	{r3, r4, r5, pc}
+ 107              	.LVL6:
+ 108              	.L8:
+ 109 0026 00BF     		.align	2
+ 110              	.L7:
+ 111 0028 00000000 		.word	huart2
+ 112              		.cfi_endproc
+ 113              	.LFE68:
+ 115              		.section	.text.serial_usart_buffer_count,"ax",%progbits
+ 116              		.align	1
+ 117              		.global	serial_usart_buffer_count
+ 118              		.syntax unified
+ 119              		.thumb
+ 120              		.thumb_func
+ 121              		.fpu softvfp
+ 123              	serial_usart_buffer_count:
+ 124              	.LFB69:
+  90:src/comms.c   **** 
+  91:src/comms.c   **** #ifdef SERIAL_USART2_IT
+  92:src/comms.c   **** 
+  93:src/comms.c   **** int USART2_IT_starttx() {
+  94:src/comms.c   ****     __HAL_UART_ENABLE_IT(&huart2, UART_IT_TXE);
+  95:src/comms.c   ****     return 1;
+  96:src/comms.c   **** }
+  97:src/comms.c   **** 
+  98:src/comms.c   **** int USART2_IT_send(unsigned char *data, int len) {
+  99:src/comms.c   **** 
+ 100:src/comms.c   ****     int count = serial_usart_buffer_count(&usart2_it_TXbuffer);
+ 101:src/comms.c   ****     if (count + len + 1 > SERIAL_USART_BUFFER_SIZE-3){
+ 102:src/comms.c   ****         usart2_it_TXbuffer.overflow++;
+ 103:src/comms.c   ****         return -1;
+ 104:src/comms.c   ****     }
+ 105:src/comms.c   **** 
+ 106:src/comms.c   ****     for (int i = 0; i < len; i++){
+ 107:src/comms.c   ****         serial_usart_buffer_push(&usart2_it_TXbuffer, (SERIAL_USART_IT_BUFFERTYPE) data[i]);
+ 108:src/comms.c   ****     }
+ 109:src/comms.c   **** 
+ 110:src/comms.c   ****     return USART2_IT_starttx();
+ 111:src/comms.c   **** }
+ARM GAS  /tmp/cctX7tPA.s 			page 5
+
+
+ 112:src/comms.c   **** 
+ 113:src/comms.c   **** //////////////////////////////////////////////////////
+ 114:src/comms.c   **** // called from actual IRQ routines
+ 115:src/comms.c   **** void USART2_IT_IRQ(USART_TypeDef *us) {
+ 116:src/comms.c   ****   volatile uint32_t *SR     = &us->SR;  // USART Status register
+ 117:src/comms.c   ****   volatile uint32_t *DR     = &us->DR;  // USART Data register
+ 118:src/comms.c   ****   volatile uint32_t *CR1    = &us->CR1; // USART Control register 1
+ 119:src/comms.c   **** 
+ 120:src/comms.c   ****   // Transmit
+ 121:src/comms.c   ****   if ((*SR) & UART_FLAG_TXE) {
+ 122:src/comms.c   ****     if (serial_usart_buffer_count(&usart2_it_TXbuffer) == 0) {
+ 123:src/comms.c   ****       *CR1 = (*CR1 & ~(USART_CR1_TXEIE | USART_CR1_TCIE));
+ 124:src/comms.c   ****     } else {
+ 125:src/comms.c   ****       *DR = (serial_usart_buffer_pop(&usart2_it_TXbuffer) & 0x1ff);
+ 126:src/comms.c   ****     }
+ 127:src/comms.c   ****   }
+ 128:src/comms.c   **** 
+ 129:src/comms.c   ****   // Receive
+ 130:src/comms.c   ****   if (((*SR) & UART_FLAG_RXNE)) {
+ 131:src/comms.c   ****     SERIAL_USART_IT_BUFFERTYPE rword = (*DR) & 0x01FF;
+ 132:src/comms.c   ****     serial_usart_buffer_push(&usart2_it_RXbuffer, rword);
+ 133:src/comms.c   ****   }
+ 134:src/comms.c   **** 
+ 135:src/comms.c   ****   return;
+ 136:src/comms.c   **** }
+ 137:src/comms.c   **** 
+ 138:src/comms.c   **** #endif
+ 139:src/comms.c   **** 
+ 140:src/comms.c   **** #ifdef SERIAL_USART3_IT
+ 141:src/comms.c   **** 
+ 142:src/comms.c   **** int USART3_IT_starttx() {
+ 143:src/comms.c   ****     __HAL_UART_ENABLE_IT(&huart3, UART_IT_TXE);
+ 144:src/comms.c   ****     return 1;
+ 145:src/comms.c   **** }
+ 146:src/comms.c   **** 
+ 147:src/comms.c   **** int USART3_IT_send(unsigned char *data, int len) {
+ 148:src/comms.c   **** 
+ 149:src/comms.c   ****     int count = serial_usart_buffer_count(&usart3_it_TXbuffer);
+ 150:src/comms.c   ****     if (count + len + 1 > SERIAL_USART_BUFFER_SIZE-3){
+ 151:src/comms.c   ****         usart3_it_TXbuffer.overflow++;
+ 152:src/comms.c   ****         return -1;
+ 153:src/comms.c   ****     }
+ 154:src/comms.c   **** 
+ 155:src/comms.c   ****     for (int i = 0; i < len; i++){
+ 156:src/comms.c   ****         serial_usart_buffer_push(&usart3_it_TXbuffer, (SERIAL_USART_IT_BUFFERTYPE) data[i]);
+ 157:src/comms.c   ****     }
+ 158:src/comms.c   **** 
+ 159:src/comms.c   ****     return USART3_IT_starttx();
+ 160:src/comms.c   **** }
+ 161:src/comms.c   **** 
+ 162:src/comms.c   **** //////////////////////////////////////////////////////
+ 163:src/comms.c   **** // called from actual IRQ routines
+ 164:src/comms.c   **** void USART3_IT_IRQ(USART_TypeDef *us) {
+ 165:src/comms.c   ****   volatile uint32_t *SR     = &us->SR;  // USART Status register
+ 166:src/comms.c   ****   volatile uint32_t *DR     = &us->DR;  // USART Data register
+ 167:src/comms.c   ****   volatile uint32_t *CR1    = &us->CR1; // USART Control register 1
+ 168:src/comms.c   **** 
+ARM GAS  /tmp/cctX7tPA.s 			page 6
+
+
+ 169:src/comms.c   ****   // Transmit
+ 170:src/comms.c   ****   if ((*SR) & UART_FLAG_TXE) {
+ 171:src/comms.c   ****     if (serial_usart_buffer_count(&usart3_it_TXbuffer) == 0) {
+ 172:src/comms.c   ****       *CR1 = (*CR1 & ~(USART_CR1_TXEIE | USART_CR1_TCIE));
+ 173:src/comms.c   ****     } else {
+ 174:src/comms.c   ****       *DR = (serial_usart_buffer_pop(&usart3_it_TXbuffer) & 0x1ff);
+ 175:src/comms.c   ****     }
+ 176:src/comms.c   ****   }
+ 177:src/comms.c   **** 
+ 178:src/comms.c   ****   // Receive
+ 179:src/comms.c   ****   if (((*SR) & UART_FLAG_RXNE)) {
+ 180:src/comms.c   ****     SERIAL_USART_IT_BUFFERTYPE rword = (*DR) & 0x01FF;
+ 181:src/comms.c   ****     serial_usart_buffer_push(&usart3_it_RXbuffer, rword);
+ 182:src/comms.c   ****   }
+ 183:src/comms.c   **** 
+ 184:src/comms.c   ****   return;
+ 185:src/comms.c   **** }
+ 186:src/comms.c   **** 
+ 187:src/comms.c   **** #endif
+ 188:src/comms.c   **** 
+ 189:src/comms.c   **** int serial_usart_buffer_count(volatile SERIAL_USART_BUFFER *usart_buf) {
+ 125              		.loc 1 189 0
+ 126              		.cfi_startproc
+ 127              		@ args = 0, pretend = 0, frame = 0
+ 128              		@ frame_needed = 0, uses_anonymous_args = 0
+ 129              		@ link register save eliminated.
+ 130              	.LVL7:
+ 190:src/comms.c   ****     int count = usart_buf->head - usart_buf->tail;
+ 131              		.loc 1 190 0
+ 132 0000 D0F80034 		ldr	r3, [r0, #1024]
+ 133 0004 D0F80404 		ldr	r0, [r0, #1028]
+ 134              	.LVL8:
+ 191:src/comms.c   ****     if (count < 0) count += SERIAL_USART_BUFFER_SIZE;
+ 135              		.loc 1 191 0
+ 136 0008 181A     		subs	r0, r3, r0
+ 137              	.LVL9:
+ 138 000a 00D4     		bmi	.L11
+ 139              	.LVL10:
+ 140              	.L9:
+ 192:src/comms.c   ****     return count;
+ 193:src/comms.c   **** }
+ 141              		.loc 1 193 0
+ 142 000c 7047     		bx	lr
+ 143              	.LVL11:
+ 144              	.L11:
+ 191:src/comms.c   ****     if (count < 0) count += SERIAL_USART_BUFFER_SIZE;
+ 145              		.loc 1 191 0 discriminator 1
+ 146 000e 00F58060 		add	r0, r0, #1024
+ 147              	.LVL12:
+ 192:src/comms.c   ****     return count;
+ 148              		.loc 1 192 0 discriminator 1
+ 149 0012 FBE7     		b	.L9
+ 150              		.cfi_endproc
+ 151              	.LFE69:
+ 153              		.section	.text.serial_usart_buffer_push,"ax",%progbits
+ 154              		.align	1
+ 155              		.global	serial_usart_buffer_push
+ARM GAS  /tmp/cctX7tPA.s 			page 7
+
+
+ 156              		.syntax unified
+ 157              		.thumb
+ 158              		.thumb_func
+ 159              		.fpu softvfp
+ 161              	serial_usart_buffer_push:
+ 162              	.LFB70:
+ 194:src/comms.c   **** 
+ 195:src/comms.c   **** void serial_usart_buffer_push(volatile SERIAL_USART_BUFFER *usart_buf, SERIAL_USART_IT_BUFFERTYPE v
+ 163              		.loc 1 195 0
+ 164              		.cfi_startproc
+ 165              		@ args = 0, pretend = 0, frame = 0
+ 166              		@ frame_needed = 0, uses_anonymous_args = 0
+ 167              	.LVL13:
+ 168 0000 38B5     		push	{r3, r4, r5, lr}
+ 169              	.LCFI1:
+ 170              		.cfi_def_cfa_offset 16
+ 171              		.cfi_offset 3, -16
+ 172              		.cfi_offset 4, -12
+ 173              		.cfi_offset 5, -8
+ 174              		.cfi_offset 14, -4
+ 175 0002 0446     		mov	r4, r0
+ 176 0004 0D46     		mov	r5, r1
+ 196:src/comms.c   ****     int count = serial_usart_buffer_count(usart_buf);
+ 177              		.loc 1 196 0
+ 178 0006 FFF7FEFF 		bl	serial_usart_buffer_count
+ 179              	.LVL14:
+ 197:src/comms.c   ****     if (count >=  SERIAL_USART_BUFFER_SIZE-2){
+ 180              		.loc 1 197 0
+ 181 000a 40F2FD33 		movw	r3, #1021
+ 182 000e 9842     		cmp	r0, r3
+ 183 0010 0FDC     		bgt	.L16
+ 198:src/comms.c   ****         usart_buf->overflow++;
+ 199:src/comms.c   ****         return;
+ 200:src/comms.c   ****     }
+ 201:src/comms.c   **** 
+ 202:src/comms.c   ****     usart_buf->buff[usart_buf->head] = value;
+ 184              		.loc 1 202 0
+ 185 0012 D4F80034 		ldr	r3, [r4, #1024]
+ 186 0016 E554     		strb	r5, [r4, r3]
+ 203:src/comms.c   ****     usart_buf->head = ((usart_buf->head + 1 ) % SERIAL_USART_BUFFER_SIZE);
+ 187              		.loc 1 203 0
+ 188 0018 D4F80034 		ldr	r3, [r4, #1024]
+ 189 001c 0133     		adds	r3, r3, #1
+ 190 001e 5A42     		rsbs	r2, r3, #0
+ 191 0020 C3F30903 		ubfx	r3, r3, #0, #10
+ 192 0024 C2F30902 		ubfx	r2, r2, #0, #10
+ 193 0028 58BF     		it	pl
+ 194 002a 5342     		rsbpl	r3, r2, #0
+ 195 002c C4F80034 		str	r3, [r4, #1024]
+ 196              	.L12:
+ 204:src/comms.c   **** }
+ 197              		.loc 1 204 0
+ 198 0030 38BD     		pop	{r3, r4, r5, pc}
+ 199              	.LVL15:
+ 200              	.L16:
+ 198:src/comms.c   ****         usart_buf->overflow++;
+ 201              		.loc 1 198 0
+ARM GAS  /tmp/cctX7tPA.s 			page 8
+
+
+ 202 0032 D4F80834 		ldr	r3, [r4, #1032]
+ 203 0036 0133     		adds	r3, r3, #1
+ 204 0038 C4F80834 		str	r3, [r4, #1032]
+ 199:src/comms.c   ****     }
+ 205              		.loc 1 199 0
+ 206 003c F8E7     		b	.L12
+ 207              		.cfi_endproc
+ 208              	.LFE70:
+ 210              		.section	.text.serial_usart_buffer_pop,"ax",%progbits
+ 211              		.align	1
+ 212              		.global	serial_usart_buffer_pop
+ 213              		.syntax unified
+ 214              		.thumb
+ 215              		.thumb_func
+ 216              		.fpu softvfp
+ 218              	serial_usart_buffer_pop:
+ 219              	.LFB71:
+ 205:src/comms.c   **** 
+ 206:src/comms.c   **** SERIAL_USART_IT_BUFFERTYPE serial_usart_buffer_pop(volatile SERIAL_USART_BUFFER *usart_buf) {
+ 220              		.loc 1 206 0
+ 221              		.cfi_startproc
+ 222              		@ args = 0, pretend = 0, frame = 0
+ 223              		@ frame_needed = 0, uses_anonymous_args = 0
+ 224              		@ link register save eliminated.
+ 225              	.LVL16:
+ 226 0000 0246     		mov	r2, r0
+ 227              	.LVL17:
+ 207:src/comms.c   ****   SERIAL_USART_IT_BUFFERTYPE t = 0;
+ 208:src/comms.c   ****   if (usart_buf->head != usart_buf->tail){
+ 228              		.loc 1 208 0
+ 229 0002 D0F80014 		ldr	r1, [r0, #1024]
+ 230 0006 D0F80434 		ldr	r3, [r0, #1028]
+ 231 000a 9942     		cmp	r1, r3
+ 232 000c 10D0     		beq	.L19
+ 209:src/comms.c   ****       t = usart_buf->buff[usart_buf->tail];
+ 233              		.loc 1 209 0
+ 234 000e D0F80434 		ldr	r3, [r0, #1028]
+ 235 0012 C05C     		ldrb	r0, [r0, r3]	@ zero_extendqisi2
+ 236              	.LVL18:
+ 237 0014 C0B2     		uxtb	r0, r0
+ 238              	.LVL19:
+ 210:src/comms.c   ****       usart_buf->tail = ((usart_buf->tail + 1 ) % SERIAL_USART_BUFFER_SIZE);
+ 239              		.loc 1 210 0
+ 240 0016 D2F80434 		ldr	r3, [r2, #1028]
+ 241 001a 0133     		adds	r3, r3, #1
+ 242 001c 5942     		rsbs	r1, r3, #0
+ 243 001e C3F30903 		ubfx	r3, r3, #0, #10
+ 244 0022 C1F30901 		ubfx	r1, r1, #0, #10
+ 245 0026 58BF     		it	pl
+ 246 0028 4B42     		rsbpl	r3, r1, #0
+ 247 002a C2F80434 		str	r3, [r2, #1028]
+ 248 002e 7047     		bx	lr
+ 249              	.LVL20:
+ 250              	.L19:
+ 207:src/comms.c   ****   SERIAL_USART_IT_BUFFERTYPE t = 0;
+ 251              		.loc 1 207 0
+ 252 0030 0020     		movs	r0, #0
+ARM GAS  /tmp/cctX7tPA.s 			page 9
+
+
+ 253              	.LVL21:
+ 211:src/comms.c   ****   }
+ 212:src/comms.c   ****   return t;
+ 213:src/comms.c   **** }
+ 254              		.loc 1 213 0
+ 255 0032 7047     		bx	lr
+ 256              		.cfi_endproc
+ 257              	.LFE71:
+ 259              		.section	.text.serial_usart_buffer_flush,"ax",%progbits
+ 260              		.align	1
+ 261              		.global	serial_usart_buffer_flush
+ 262              		.syntax unified
+ 263              		.thumb
+ 264              		.thumb_func
+ 265              		.fpu softvfp
+ 267              	serial_usart_buffer_flush:
+ 268              	.LFB72:
+ 214:src/comms.c   **** 
+ 215:src/comms.c   **** void serial_usart_buffer_flush(volatile SERIAL_USART_BUFFER *usart_buf) {
+ 269              		.loc 1 215 0
+ 270              		.cfi_startproc
+ 271              		@ args = 0, pretend = 0, frame = 0
+ 272              		@ frame_needed = 0, uses_anonymous_args = 0
+ 273              		@ link register save eliminated.
+ 274              	.LVL22:
+ 216:src/comms.c   ****   usart_buf->tail = usart_buf->head;
+ 275              		.loc 1 216 0
+ 276 0000 D0F80034 		ldr	r3, [r0, #1024]
+ 277 0004 C0F80434 		str	r3, [r0, #1028]
+ 217:src/comms.c   **** }
+ 278              		.loc 1 217 0
+ 279 0008 7047     		bx	lr
+ 280              		.cfi_endproc
+ 281              	.LFE72:
+ 283              		.global	enablescope
+ 284              		.global	debug_out
+ 285              		.comm	ch_buf,16,4
+ 286              		.comm	uart_buf,100,4
+ 287              		.section	.data.debug_out,"aw",%progbits
+ 288              		.align	2
+ 291              	debug_out:
+ 292 0000 01000000 		.word	1
+ 293              		.section	.data.enablescope,"aw",%progbits
+ 294              		.align	2
+ 297              	enablescope:
+ 298 0000 01000000 		.word	1
+ 299              		.text
+ 300              	.Letext0:
+ 301              		.file 2 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 302              		.file 3 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 303              		.file 4 "Drivers/CMSIS/Include/core_cm3.h"
+ 304              		.file 5 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/system_stm32f1xx.h"
+ 305              		.file 6 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xe.h"
+ 306              		.file 7 "/usr/arm-none-eabi/include/sys/lock.h"
+ 307              		.file 8 "/usr/arm-none-eabi/include/sys/_types.h"
+ 308              		.file 9 "/usr/lib/gcc/arm-none-eabi/7.3.1/include/stddef.h"
+ 309              		.file 10 "/usr/arm-none-eabi/include/sys/reent.h"
+ARM GAS  /tmp/cctX7tPA.s 			page 10
+
+
+ 310              		.file 11 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h"
+ 311              		.file 12 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma.h"
+ 312              		.file 13 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h"
+ 313              		.file 14 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h"
+ 314              		.file 15 "inc/setup.h"
+ 315              		.file 16 "inc/comms.h"
+ 316              		.file 17 "/usr/arm-none-eabi/include/string.h"
+ARM GAS  /tmp/cctX7tPA.s 			page 11
+
+
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 comms.c
+     /tmp/cctX7tPA.s:16     .text.setScopeChannel:0000000000000000 $t
+     /tmp/cctX7tPA.s:23     .text.setScopeChannel:0000000000000000 setScopeChannel
+     /tmp/cctX7tPA.s:40     .text.setScopeChannel:0000000000000008 $d
+                            *COM*:0000000000000010 ch_buf
+     /tmp/cctX7tPA.s:45     .text.consoleScope:0000000000000000 $t
+     /tmp/cctX7tPA.s:52     .text.consoleScope:0000000000000000 consoleScope
+     /tmp/cctX7tPA.s:65     .text.consoleLog:0000000000000000 $t
+     /tmp/cctX7tPA.s:72     .text.consoleLog:0000000000000000 consoleLog
+     /tmp/cctX7tPA.s:111    .text.consoleLog:0000000000000028 $d
+     /tmp/cctX7tPA.s:116    .text.serial_usart_buffer_count:0000000000000000 $t
+     /tmp/cctX7tPA.s:123    .text.serial_usart_buffer_count:0000000000000000 serial_usart_buffer_count
+     /tmp/cctX7tPA.s:154    .text.serial_usart_buffer_push:0000000000000000 $t
+     /tmp/cctX7tPA.s:161    .text.serial_usart_buffer_push:0000000000000000 serial_usart_buffer_push
+     /tmp/cctX7tPA.s:211    .text.serial_usart_buffer_pop:0000000000000000 $t
+     /tmp/cctX7tPA.s:218    .text.serial_usart_buffer_pop:0000000000000000 serial_usart_buffer_pop
+     /tmp/cctX7tPA.s:260    .text.serial_usart_buffer_flush:0000000000000000 $t
+     /tmp/cctX7tPA.s:267    .text.serial_usart_buffer_flush:0000000000000000 serial_usart_buffer_flush
+     /tmp/cctX7tPA.s:297    .data.enablescope:0000000000000000 enablescope
+     /tmp/cctX7tPA.s:291    .data.debug_out:0000000000000000 debug_out
+                            *COM*:0000000000000064 uart_buf
+     /tmp/cctX7tPA.s:288    .data.debug_out:0000000000000000 $d
+     /tmp/cctX7tPA.s:294    .data.enablescope:0000000000000000 $d
+
+UNDEFINED SYMBOLS
+strlen
+HAL_UART_Transmit_DMA
+huart2

@@ -1,0 +1,1481 @@
+ARM GAS  /tmp/ccOwJEX4.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.eabi_attribute 20, 1
+   3              		.eabi_attribute 21, 1
+   4              		.eabi_attribute 23, 3
+   5              		.eabi_attribute 24, 1
+   6              		.eabi_attribute 25, 1
+   7              		.eabi_attribute 26, 1
+   8              		.eabi_attribute 30, 1
+   9              		.eabi_attribute 34, 1
+  10              		.eabi_attribute 18, 4
+  11              		.file	"hallinterrupts.c"
+  12              		.text
+  13              	.Ltext0:
+  14              		.cfi_sections	.debug_frame
+  15              		.global	__aeabi_f2d
+  16              		.global	__aeabi_dmul
+  17              		.global	__aeabi_ddiv
+  18              		.global	__aeabi_d2f
+  19              		.section	.text.HallInterruptinit,"ax",%progbits
+  20              		.align	1
+  21              		.global	HallInterruptinit
+  22              		.syntax unified
+  23              		.thumb
+  24              		.thumb_func
+  25              		.fpu softvfp
+  27              	HallInterruptinit:
+  28              	.LFB66:
+  29              		.file 1 "src/hallinterrupts.c"
+   1:src/hallinterrupts.c **** /*
+   2:src/hallinterrupts.c **** * This file is part of the hoverboard-firmware-hack project.
+   3:src/hallinterrupts.c **** *
+   4:src/hallinterrupts.c **** * Copyright (C) 2018 Simon Hailes <btsimonh@googlemail.com>
+   5:src/hallinterrupts.c **** *
+   6:src/hallinterrupts.c **** * This program is free software: you can redistribute it and/or modify
+   7:src/hallinterrupts.c **** * it under the terms of the GNU General Public License as published by
+   8:src/hallinterrupts.c **** * the Free Software Foundation, either version 3 of the License, or
+   9:src/hallinterrupts.c **** * (at your option) any later version.
+  10:src/hallinterrupts.c **** *
+  11:src/hallinterrupts.c **** * This program is distributed in the hope that it will be useful,
+  12:src/hallinterrupts.c **** * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  13:src/hallinterrupts.c **** * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  14:src/hallinterrupts.c **** * GNU General Public License for more details.
+  15:src/hallinterrupts.c **** *
+  16:src/hallinterrupts.c **** * You should have received a copy of the GNU General Public License
+  17:src/hallinterrupts.c **** * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  18:src/hallinterrupts.c **** */
+  19:src/hallinterrupts.c **** 
+  20:src/hallinterrupts.c **** #include "stm32f1xx_hal.h"
+  21:src/hallinterrupts.c **** #include "defines.h"
+  22:src/hallinterrupts.c **** #include "config.h"
+  23:src/hallinterrupts.c **** #include "hallinterrupts.h"
+  24:src/hallinterrupts.c **** #include <memory.h>
+  25:src/hallinterrupts.c **** 
+  26:src/hallinterrupts.c **** #ifdef HALL_INTERRUPTS
+  27:src/hallinterrupts.c **** 
+  28:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  29:src/hallinterrupts.c **** // file reads Hall sensors, and gets Distance and Speed.
+ARM GAS  /tmp/ccOwJEX4.s 			page 2
+
+
+  30:src/hallinterrupts.c **** // Uses:
+  31:src/hallinterrupts.c **** // EXTI15_10_IRQHandler
+  32:src/hallinterrupts.c **** // EXTI9_5_IRQHandler
+  33:src/hallinterrupts.c **** // TIM4 running at 100khz, reloading 0xFFFF
+  34:src/hallinterrupts.c **** // TIM4_IRQHandler
+  35:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  36:src/hallinterrupts.c **** // Usage: just start with HallInterruptinit(void) and
+  37:src/hallinterrupts.c **** // read results from HALL_DATA_STRUCT HallData[2];
+  38:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  39:src/hallinterrupts.c **** // Notes:
+  40:src/hallinterrupts.c **** // for distance measurement and speed calculations, it defaults to 6.5" wheels.
+  41:src/hallinterrupts.c **** // this may be changed by calling:
+  42:src/hallinterrupts.c **** // void HallInterruptSetWheelDiameterInches(float inches);
+  43:src/hallinterrupts.c **** // or
+  44:src/hallinterrupts.c **** // void HallInterruptSetWheelDiameterMM(float mm);
+  45:src/hallinterrupts.c **** //
+  46:src/hallinterrupts.c **** // if you wish to reset the values in the structure completely, use:
+  47:src/hallinterrupts.c **** // void HallInterruptReset();
+  48:src/hallinterrupts.c **** // if you wish to read distance and spped, and optionally reset distance to zero,
+  49:src/hallinterrupts.c **** // then use:
+  50:src/hallinterrupts.c **** // void HallInterruptReadPosn( HALL_POSN *p, int Reset );
+  51:src/hallinterrupts.c **** //
+  52:src/hallinterrupts.c **** // NOTE: if the hall pins are reconfigured to NOT be in the set 5-9, 10-15
+  53:src/hallinterrupts.c **** // then mods will need to be made.
+  54:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  55:src/hallinterrupts.c **** 
+  56:src/hallinterrupts.c **** 
+  57:src/hallinterrupts.c **** 
+  58:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  59:src/hallinterrupts.c **** // this is the Hall data we gather, and can be read directly elsewhere
+  60:src/hallinterrupts.c **** // it CAN be read with interrupts disabled using
+  61:src/hallinterrupts.c **** // void HallInterruptReadPosn( HALL_POSN *p, int Reset )
+  62:src/hallinterrupts.c **** volatile HALL_DATA_STRUCT HallData[2];
+  63:src/hallinterrupts.c **** 
+  64:src/hallinterrupts.c **** 
+  65:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  66:src/hallinterrupts.c **** // local data
+  67:src/hallinterrupts.c **** TIM_HandleTypeDef h_timer_hall;
+  68:src/hallinterrupts.c **** volatile HALL_PARAMS local_hall_params[2];
+  69:src/hallinterrupts.c **** 
+  70:src/hallinterrupts.c **** volatile long long timerwraps = 0;
+  71:src/hallinterrupts.c **** 
+  72:src/hallinterrupts.c **** static float WheelSize_mm = (DEFAULT_WHEEL_SIZE_INCHES * 25.4);
+  73:src/hallinterrupts.c **** 
+  74:src/hallinterrupts.c **** 
+  75:src/hallinterrupts.c **** 
+  76:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+  77:src/hallinterrupts.c **** // intialisation for interrupts from hall sensor edges
+  78:src/hallinterrupts.c **** void HallInterruptinit(void){
+  30              		.loc 1 78 0
+  31              		.cfi_startproc
+  32              		@ args = 0, pretend = 0, frame = 8
+  33              		@ frame_needed = 0, uses_anonymous_args = 0
+  34 0000 70B5     		push	{r4, r5, r6, lr}
+  35              	.LCFI0:
+  36              		.cfi_def_cfa_offset 16
+  37              		.cfi_offset 4, -16
+ARM GAS  /tmp/ccOwJEX4.s 			page 3
+
+
+  38              		.cfi_offset 5, -12
+  39              		.cfi_offset 6, -8
+  40              		.cfi_offset 14, -4
+  41 0002 82B0     		sub	sp, sp, #8
+  42              	.LCFI1:
+  43              		.cfi_def_cfa_offset 24
+  79:src/hallinterrupts.c ****     memset((void *)&HallData, 0, sizeof(HallData));
+  44              		.loc 1 79 0
+  45 0004 304C     		ldr	r4, .L3+8
+  46 0006 4022     		movs	r2, #64
+  47 0008 0021     		movs	r1, #0
+  48 000a 2046     		mov	r0, r4
+  49 000c FFF7FEFF 		bl	memset
+  50              	.LVL0:
+  80:src/hallinterrupts.c ****     memset((void *)&local_hall_params, 0, sizeof(local_hall_params));
+  51              		.loc 1 80 0
+  52 0010 2E4D     		ldr	r5, .L3+12
+  53 0012 6022     		movs	r2, #96
+  54 0014 0021     		movs	r1, #0
+  55 0016 2846     		mov	r0, r5
+  56 0018 FFF7FEFF 		bl	memset
+  57              	.LVL1:
+  81:src/hallinterrupts.c ****     local_hall_params[0].direction = -1;
+  58              		.loc 1 81 0
+  59 001c 4FF0FF33 		mov	r3, #-1
+  60 0020 AB62     		str	r3, [r5, #40]
+  82:src/hallinterrupts.c ****     local_hall_params[1].direction = 1;
+  61              		.loc 1 82 0
+  62 0022 0126     		movs	r6, #1
+  63 0024 AE65     		str	r6, [r5, #88]
+  83:src/hallinterrupts.c **** 
+  84:src/hallinterrupts.c ****     // overrides local fle default
+  85:src/hallinterrupts.c ****     #ifdef WHEEL_SIZE_INCHES
+  86:src/hallinterrupts.c ****     WheelSize_mm = (WHEEL_SIZE_INCHES * 25.4);
+  87:src/hallinterrupts.c ****     #endif
+  88:src/hallinterrupts.c **** 
+  89:src/hallinterrupts.c ****     HallData[0].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+  64              		.loc 1 89 0
+  65 0026 2A4B     		ldr	r3, .L3+16
+  66 0028 1868     		ldr	r0, [r3]	@ float
+  67 002a FFF7FEFF 		bl	__aeabi_f2d
+  68              	.LVL2:
+  69 002e 24A3     		adr	r3, .L3
+  70 0030 D3E90023 		ldrd	r2, [r3]
+  71 0034 FFF7FEFF 		bl	__aeabi_dmul
+  72              	.LVL3:
+  73 0038 0022     		movs	r2, #0
+  74 003a 264B     		ldr	r3, .L3+20
+  75 003c FFF7FEFF 		bl	__aeabi_ddiv
+  76              	.LVL4:
+  77 0040 FFF7FEFF 		bl	__aeabi_d2f
+  78              	.LVL5:
+  79 0044 A060     		str	r0, [r4, #8]	@ float
+  90:src/hallinterrupts.c ****     HallData[1].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+  80              		.loc 1 90 0
+  81 0046 A062     		str	r0, [r4, #40]	@ float
+  82              	.LBB17:
+ARM GAS  /tmp/ccOwJEX4.s 			page 4
+
+
+  91:src/hallinterrupts.c **** 
+  92:src/hallinterrupts.c ****     // setup TIM4:
+  93:src/hallinterrupts.c ****     __HAL_RCC_TIM4_CLK_ENABLE();
+  83              		.loc 1 93 0
+  84 0048 234B     		ldr	r3, .L3+24
+  85 004a DA69     		ldr	r2, [r3, #28]
+  86 004c 42F00402 		orr	r2, r2, #4
+  87 0050 DA61     		str	r2, [r3, #28]
+  88 0052 DB69     		ldr	r3, [r3, #28]
+  89 0054 03F00403 		and	r3, r3, #4
+  90 0058 0193     		str	r3, [sp, #4]
+  91 005a 019B     		ldr	r3, [sp, #4]
+  92              	.LBE17:
+  94:src/hallinterrupts.c ****     h_timer_hall.Instance = TIM4;
+  93              		.loc 1 94 0
+  94 005c 1F4C     		ldr	r4, .L3+28
+  95 005e 204B     		ldr	r3, .L3+32
+  96 0060 2360     		str	r3, [r4]
+  95:src/hallinterrupts.c ****     h_timer_hall.Init.Prescaler         = 64000000 / 2 / HALL_INTERRUPT_TIMER_FREQ;
+  97              		.loc 1 95 0
+  98 0062 4FF4A073 		mov	r3, #320
+  99 0066 6360     		str	r3, [r4, #4]
+  96:src/hallinterrupts.c ****     h_timer_hall.Init.CounterMode       = TIM_COUNTERMODE_UP;
+ 100              		.loc 1 96 0
+ 101 0068 0025     		movs	r5, #0
+ 102 006a A560     		str	r5, [r4, #8]
+  97:src/hallinterrupts.c ****     h_timer_hall.Init.Period            = 0xFFFF; // we just want the timer to wrap
+ 103              		.loc 1 97 0
+ 104 006c 4FF6FF73 		movw	r3, #65535
+ 105 0070 E360     		str	r3, [r4, #12]
+  98:src/hallinterrupts.c ****     h_timer_hall.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+ 106              		.loc 1 98 0
+ 107 0072 2561     		str	r5, [r4, #16]
+  99:src/hallinterrupts.c ****     h_timer_hall.Init.RepetitionCounter = 0;
+ 108              		.loc 1 99 0
+ 109 0074 6561     		str	r5, [r4, #20]
+ 100:src/hallinterrupts.c ****     h_timer_hall.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+ 110              		.loc 1 100 0
+ 111 0076 A561     		str	r5, [r4, #24]
+ 101:src/hallinterrupts.c ****     HAL_TIM_Base_Init(&h_timer_hall);
+ 112              		.loc 1 101 0
+ 113 0078 2046     		mov	r0, r4
+ 114 007a FFF7FEFF 		bl	HAL_TIM_Base_Init
+ 115              	.LVL6:
+ 102:src/hallinterrupts.c ****     HAL_TIM_Base_Start(&h_timer_hall);
+ 116              		.loc 1 102 0
+ 117 007e 2046     		mov	r0, r4
+ 118 0080 FFF7FEFF 		bl	HAL_TIM_Base_Start
+ 119              	.LVL7:
+ 103:src/hallinterrupts.c **** 
+ 104:src/hallinterrupts.c ****     // generate an interrupt every time the timer wraps it's 16 bit limit.
+ 105:src/hallinterrupts.c ****     __HAL_TIM_ENABLE_IT(&h_timer_hall, TIM_IT_UPDATE);
+ 120              		.loc 1 105 0
+ 121 0084 2268     		ldr	r2, [r4]
+ 122 0086 D368     		ldr	r3, [r2, #12]
+ 123 0088 3343     		orrs	r3, r3, r6
+ 124 008a D360     		str	r3, [r2, #12]
+ARM GAS  /tmp/ccOwJEX4.s 			page 5
+
+
+ 106:src/hallinterrupts.c ****     HAL_NVIC_SetPriority(TIM4_IRQn, 1, 0);
+ 125              		.loc 1 106 0
+ 126 008c 2A46     		mov	r2, r5
+ 127 008e 3146     		mov	r1, r6
+ 128 0090 1E20     		movs	r0, #30
+ 129 0092 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 130              	.LVL8:
+ 107:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(TIM4_IRQn);
+ 131              		.loc 1 107 0
+ 132 0096 1E20     		movs	r0, #30
+ 133 0098 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 134              	.LVL9:
+ 108:src/hallinterrupts.c **** 
+ 109:src/hallinterrupts.c ****     // enable IRQs for tyhe hall efect sensor GPIOs.
+ 110:src/hallinterrupts.c ****     HAL_NVIC_SetPriority(EXTI9_5_IRQn, 3, 0);
+ 135              		.loc 1 110 0
+ 136 009c 2A46     		mov	r2, r5
+ 137 009e 0321     		movs	r1, #3
+ 138 00a0 1720     		movs	r0, #23
+ 139 00a2 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 140              	.LVL10:
+ 111:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+ 141              		.loc 1 111 0
+ 142 00a6 1720     		movs	r0, #23
+ 143 00a8 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 144              	.LVL11:
+ 112:src/hallinterrupts.c ****     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 3, 0);
+ 145              		.loc 1 112 0
+ 146 00ac 2A46     		mov	r2, r5
+ 147 00ae 0321     		movs	r1, #3
+ 148 00b0 2820     		movs	r0, #40
+ 149 00b2 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 150              	.LVL12:
+ 113:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+ 151              		.loc 1 113 0
+ 152 00b6 2820     		movs	r0, #40
+ 153 00b8 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 154              	.LVL13:
+ 114:src/hallinterrupts.c **** }
+ 155              		.loc 1 114 0
+ 156 00bc 02B0     		add	sp, sp, #8
+ 157              	.LCFI2:
+ 158              		.cfi_def_cfa_offset 16
+ 159              		@ sp needed
+ 160 00be 70BD     		pop	{r4, r5, r6, pc}
+ 161              	.L4:
+ 162              		.align	3
+ 163              	.L3:
+ 164 00c0 EA2E4454 		.word	1413754602
+ 165 00c4 FB210940 		.word	1074340347
+ 166 00c8 00000000 		.word	HallData
+ 167 00cc 00000000 		.word	local_hall_params
+ 168 00d0 00000000 		.word	.LANCHOR0
+ 169 00d4 00805640 		.word	1079410688
+ 170 00d8 00100240 		.word	1073876992
+ 171 00dc 00000000 		.word	h_timer_hall
+ 172 00e0 00080040 		.word	1073743872
+ARM GAS  /tmp/ccOwJEX4.s 			page 6
+
+
+ 173              		.cfi_endproc
+ 174              	.LFE66:
+ 176              		.section	.text.HallInterruptSetWheelDiameterInches,"ax",%progbits
+ 177              		.align	1
+ 178              		.global	HallInterruptSetWheelDiameterInches
+ 179              		.syntax unified
+ 180              		.thumb
+ 181              		.thumb_func
+ 182              		.fpu softvfp
+ 184              	HallInterruptSetWheelDiameterInches:
+ 185              	.LFB67:
+ 115:src/hallinterrupts.c **** 
+ 116:src/hallinterrupts.c **** 
+ 117:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+ 118:src/hallinterrupts.c **** // optionaly change the wheel diameter fromt he default of 6.5" using inches
+ 119:src/hallinterrupts.c **** void HallInterruptSetWheelDiameterInches(float inches){
+ 186              		.loc 1 119 0
+ 187              		.cfi_startproc
+ 188              		@ args = 0, pretend = 0, frame = 0
+ 189              		@ frame_needed = 0, uses_anonymous_args = 0
+ 190              	.LVL14:
+ 191 0000 08B5     		push	{r3, lr}
+ 192              	.LCFI3:
+ 193              		.cfi_def_cfa_offset 8
+ 194              		.cfi_offset 3, -8
+ 195              		.cfi_offset 14, -4
+ 120:src/hallinterrupts.c ****     WheelSize_mm = inches * 25.4;
+ 196              		.loc 1 120 0
+ 197 0002 FFF7FEFF 		bl	__aeabi_f2d
+ 198              	.LVL15:
+ 199 0006 0EA3     		adr	r3, .L7
+ 200 0008 D3E90023 		ldrd	r2, [r3]
+ 201 000c FFF7FEFF 		bl	__aeabi_dmul
+ 202              	.LVL16:
+ 203 0010 FFF7FEFF 		bl	__aeabi_d2f
+ 204              	.LVL17:
+ 205 0014 0E4B     		ldr	r3, .L7+16
+ 206 0016 1860     		str	r0, [r3]	@ float
+ 121:src/hallinterrupts.c ****     HallData[0].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 207              		.loc 1 121 0
+ 208 0018 FFF7FEFF 		bl	__aeabi_f2d
+ 209              	.LVL18:
+ 210 001c 0AA3     		adr	r3, .L7+8
+ 211 001e D3E90023 		ldrd	r2, [r3]
+ 212 0022 FFF7FEFF 		bl	__aeabi_dmul
+ 213              	.LVL19:
+ 214 0026 0022     		movs	r2, #0
+ 215 0028 0A4B     		ldr	r3, .L7+20
+ 216 002a FFF7FEFF 		bl	__aeabi_ddiv
+ 217              	.LVL20:
+ 218 002e FFF7FEFF 		bl	__aeabi_d2f
+ 219              	.LVL21:
+ 220 0032 094B     		ldr	r3, .L7+24
+ 221 0034 9860     		str	r0, [r3, #8]	@ float
+ 122:src/hallinterrupts.c ****     HallData[1].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 222              		.loc 1 122 0
+ 223 0036 9862     		str	r0, [r3, #40]	@ float
+ARM GAS  /tmp/ccOwJEX4.s 			page 7
+
+
+ 123:src/hallinterrupts.c **** }
+ 224              		.loc 1 123 0
+ 225 0038 08BD     		pop	{r3, pc}
+ 226              	.L8:
+ 227 003a 00BFAFF3 		.align	3
+ 227      0080
+ 228              	.L7:
+ 229 0040 66666666 		.word	1717986918
+ 230 0044 66663940 		.word	1077503590
+ 231 0048 EA2E4454 		.word	1413754602
+ 232 004c FB210940 		.word	1074340347
+ 233 0050 00000000 		.word	.LANCHOR0
+ 234 0054 00805640 		.word	1079410688
+ 235 0058 00000000 		.word	HallData
+ 236              		.cfi_endproc
+ 237              	.LFE67:
+ 239              		.section	.text.HallInterruptSetWheelDiameterMM,"ax",%progbits
+ 240              		.align	1
+ 241              		.global	HallInterruptSetWheelDiameterMM
+ 242              		.syntax unified
+ 243              		.thumb
+ 244              		.thumb_func
+ 245              		.fpu softvfp
+ 247              	HallInterruptSetWheelDiameterMM:
+ 248              	.LFB68:
+ 124:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+ 125:src/hallinterrupts.c **** // optionaly change the wheel diameter fromt he default of 6.5" using mm
+ 126:src/hallinterrupts.c **** void HallInterruptSetWheelDiameterMM(float mm){
+ 249              		.loc 1 126 0
+ 250              		.cfi_startproc
+ 251              		@ args = 0, pretend = 0, frame = 0
+ 252              		@ frame_needed = 0, uses_anonymous_args = 0
+ 253              	.LVL22:
+ 254 0000 08B5     		push	{r3, lr}
+ 255              	.LCFI4:
+ 256              		.cfi_def_cfa_offset 8
+ 257              		.cfi_offset 3, -8
+ 258              		.cfi_offset 14, -4
+ 127:src/hallinterrupts.c ****     WheelSize_mm = mm;
+ 259              		.loc 1 127 0
+ 260 0002 0B4B     		ldr	r3, .L11+8
+ 261 0004 1860     		str	r0, [r3]	@ float
+ 128:src/hallinterrupts.c ****     HallData[0].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 262              		.loc 1 128 0
+ 263 0006 FFF7FEFF 		bl	__aeabi_f2d
+ 264              	.LVL23:
+ 265 000a 07A3     		adr	r3, .L11
+ 266 000c D3E90023 		ldrd	r2, [r3]
+ 267 0010 FFF7FEFF 		bl	__aeabi_dmul
+ 268              	.LVL24:
+ 269 0014 0022     		movs	r2, #0
+ 270 0016 074B     		ldr	r3, .L11+12
+ 271 0018 FFF7FEFF 		bl	__aeabi_ddiv
+ 272              	.LVL25:
+ 273 001c FFF7FEFF 		bl	__aeabi_d2f
+ 274              	.LVL26:
+ 275 0020 054B     		ldr	r3, .L11+16
+ARM GAS  /tmp/ccOwJEX4.s 			page 8
+
+
+ 276 0022 9860     		str	r0, [r3, #8]	@ float
+ 129:src/hallinterrupts.c ****     HallData[1].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 277              		.loc 1 129 0
+ 278 0024 9862     		str	r0, [r3, #40]	@ float
+ 130:src/hallinterrupts.c **** }
+ 279              		.loc 1 130 0
+ 280 0026 08BD     		pop	{r3, pc}
+ 281              	.L12:
+ 282              		.align	3
+ 283              	.L11:
+ 284 0028 EA2E4454 		.word	1413754602
+ 285 002c FB210940 		.word	1074340347
+ 286 0030 00000000 		.word	.LANCHOR0
+ 287 0034 00805640 		.word	1079410688
+ 288 0038 00000000 		.word	HallData
+ 289              		.cfi_endproc
+ 290              	.LFE68:
+ 292              		.section	.text.HallInterruptReset,"ax",%progbits
+ 293              		.align	1
+ 294              		.global	HallInterruptReset
+ 295              		.syntax unified
+ 296              		.thumb
+ 297              		.thumb_func
+ 298              		.fpu softvfp
+ 300              	HallInterruptReset:
+ 301              	.LFB69:
+ 131:src/hallinterrupts.c **** 
+ 132:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+ 133:src/hallinterrupts.c **** // reset the whole structure.
+ 134:src/hallinterrupts.c **** // note that this will then miss the first transition, as it will have no
+ 135:src/hallinterrupts.c **** // 'last' information.
+ 136:src/hallinterrupts.c **** void HallInterruptReset(){
+ 302              		.loc 1 136 0
+ 303              		.cfi_startproc
+ 304              		@ args = 0, pretend = 0, frame = 0
+ 305              		@ frame_needed = 0, uses_anonymous_args = 0
+ 306 0000 38B5     		push	{r3, r4, r5, lr}
+ 307              	.LCFI5:
+ 308              		.cfi_def_cfa_offset 16
+ 309              		.cfi_offset 3, -16
+ 310              		.cfi_offset 4, -12
+ 311              		.cfi_offset 5, -8
+ 312              		.cfi_offset 14, -4
+ 313              	.LBB18:
+ 314              	.LBB19:
+ 315              		.file 2 "Drivers/CMSIS/Include/cmsis_gcc.h"
+   1:Drivers/CMSIS/Include/cmsis_gcc.h **** /**************************************************************************//**
+   2:Drivers/CMSIS/Include/cmsis_gcc.h ****  * @file     cmsis_gcc.h
+   3:Drivers/CMSIS/Include/cmsis_gcc.h ****  * @brief    CMSIS Cortex-M Core Function/Instruction Header File
+   4:Drivers/CMSIS/Include/cmsis_gcc.h ****  * @version  V4.30
+   5:Drivers/CMSIS/Include/cmsis_gcc.h ****  * @date     20. October 2015
+   6:Drivers/CMSIS/Include/cmsis_gcc.h ****  ******************************************************************************/
+   7:Drivers/CMSIS/Include/cmsis_gcc.h **** /* Copyright (c) 2009 - 2015 ARM LIMITED
+   8:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+   9:Drivers/CMSIS/Include/cmsis_gcc.h ****    All rights reserved.
+  10:Drivers/CMSIS/Include/cmsis_gcc.h ****    Redistribution and use in source and binary forms, with or without
+  11:Drivers/CMSIS/Include/cmsis_gcc.h ****    modification, are permitted provided that the following conditions are met:
+ARM GAS  /tmp/ccOwJEX4.s 			page 9
+
+
+  12:Drivers/CMSIS/Include/cmsis_gcc.h ****    - Redistributions of source code must retain the above copyright
+  13:Drivers/CMSIS/Include/cmsis_gcc.h ****      notice, this list of conditions and the following disclaimer.
+  14:Drivers/CMSIS/Include/cmsis_gcc.h ****    - Redistributions in binary form must reproduce the above copyright
+  15:Drivers/CMSIS/Include/cmsis_gcc.h ****      notice, this list of conditions and the following disclaimer in the
+  16:Drivers/CMSIS/Include/cmsis_gcc.h ****      documentation and/or other materials provided with the distribution.
+  17:Drivers/CMSIS/Include/cmsis_gcc.h ****    - Neither the name of ARM nor the names of its contributors may be used
+  18:Drivers/CMSIS/Include/cmsis_gcc.h ****      to endorse or promote products derived from this software without
+  19:Drivers/CMSIS/Include/cmsis_gcc.h ****      specific prior written permission.
+  20:Drivers/CMSIS/Include/cmsis_gcc.h ****    *
+  21:Drivers/CMSIS/Include/cmsis_gcc.h ****    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:Drivers/CMSIS/Include/cmsis_gcc.h ****    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:Drivers/CMSIS/Include/cmsis_gcc.h ****    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:Drivers/CMSIS/Include/cmsis_gcc.h ****    ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
+  25:Drivers/CMSIS/Include/cmsis_gcc.h ****    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:Drivers/CMSIS/Include/cmsis_gcc.h ****    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:Drivers/CMSIS/Include/cmsis_gcc.h ****    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:Drivers/CMSIS/Include/cmsis_gcc.h ****    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:Drivers/CMSIS/Include/cmsis_gcc.h ****    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:Drivers/CMSIS/Include/cmsis_gcc.h ****    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:Drivers/CMSIS/Include/cmsis_gcc.h ****    POSSIBILITY OF SUCH DAMAGE.
+  32:Drivers/CMSIS/Include/cmsis_gcc.h ****    ---------------------------------------------------------------------------*/
+  33:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  34:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  35:Drivers/CMSIS/Include/cmsis_gcc.h **** #ifndef __CMSIS_GCC_H
+  36:Drivers/CMSIS/Include/cmsis_gcc.h **** #define __CMSIS_GCC_H
+  37:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  38:Drivers/CMSIS/Include/cmsis_gcc.h **** /* ignore some GCC warnings */
+  39:Drivers/CMSIS/Include/cmsis_gcc.h **** #if defined ( __GNUC__ )
+  40:Drivers/CMSIS/Include/cmsis_gcc.h **** #pragma GCC diagnostic push
+  41:Drivers/CMSIS/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wsign-conversion"
+  42:Drivers/CMSIS/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wconversion"
+  43:Drivers/CMSIS/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wunused-parameter"
+  44:Drivers/CMSIS/Include/cmsis_gcc.h **** #endif
+  45:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  46:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  47:Drivers/CMSIS/Include/cmsis_gcc.h **** /* ###########################  Core Function Access  ########################### */
+  48:Drivers/CMSIS/Include/cmsis_gcc.h **** /** \ingroup  CMSIS_Core_FunctionInterface
+  49:Drivers/CMSIS/Include/cmsis_gcc.h ****     \defgroup CMSIS_Core_RegAccFunctions CMSIS Core Register Access Functions
+  50:Drivers/CMSIS/Include/cmsis_gcc.h ****   @{
+  51:Drivers/CMSIS/Include/cmsis_gcc.h ****  */
+  52:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  53:Drivers/CMSIS/Include/cmsis_gcc.h **** /**
+  54:Drivers/CMSIS/Include/cmsis_gcc.h ****   \brief   Enable IRQ Interrupts
+  55:Drivers/CMSIS/Include/cmsis_gcc.h ****   \details Enables IRQ interrupts by clearing the I-bit in the CPSR.
+  56:Drivers/CMSIS/Include/cmsis_gcc.h ****            Can only be executed in Privileged modes.
+  57:Drivers/CMSIS/Include/cmsis_gcc.h ****  */
+  58:Drivers/CMSIS/Include/cmsis_gcc.h **** __attribute__( ( always_inline ) ) __STATIC_INLINE void __enable_irq(void)
+  59:Drivers/CMSIS/Include/cmsis_gcc.h **** {
+  60:Drivers/CMSIS/Include/cmsis_gcc.h ****   __ASM volatile ("cpsie i" : : : "memory");
+  61:Drivers/CMSIS/Include/cmsis_gcc.h **** }
+  62:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  63:Drivers/CMSIS/Include/cmsis_gcc.h **** 
+  64:Drivers/CMSIS/Include/cmsis_gcc.h **** /**
+  65:Drivers/CMSIS/Include/cmsis_gcc.h ****   \brief   Disable IRQ Interrupts
+  66:Drivers/CMSIS/Include/cmsis_gcc.h ****   \details Disables IRQ interrupts by setting the I-bit in the CPSR.
+  67:Drivers/CMSIS/Include/cmsis_gcc.h ****   Can only be executed in Privileged modes.
+  68:Drivers/CMSIS/Include/cmsis_gcc.h ****  */
+ARM GAS  /tmp/ccOwJEX4.s 			page 10
+
+
+  69:Drivers/CMSIS/Include/cmsis_gcc.h **** __attribute__( ( always_inline ) ) __STATIC_INLINE void __disable_irq(void)
+  70:Drivers/CMSIS/Include/cmsis_gcc.h **** {
+  71:Drivers/CMSIS/Include/cmsis_gcc.h ****   __ASM volatile ("cpsid i" : : : "memory");
+ 316              		.loc 2 71 0
+ 317              		.syntax unified
+ 318              	@ 71 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 319 0002 72B6     		cpsid i
+ 320              	@ 0 "" 2
+ 321              		.thumb
+ 322              		.syntax unified
+ 323              	.LBE19:
+ 324              	.LBE18:
+ 137:src/hallinterrupts.c ****     __disable_irq(); // but we want both values at the same time, without interferance
+ 138:src/hallinterrupts.c ****     HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);
+ 325              		.loc 1 138 0
+ 326 0004 1720     		movs	r0, #23
+ 327 0006 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 328              	.LVL27:
+ 139:src/hallinterrupts.c ****     HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
+ 329              		.loc 1 139 0
+ 330 000a 2820     		movs	r0, #40
+ 331 000c FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 332              	.LVL28:
+ 333              	.LBB20:
+ 334              	.LBB21:
+  60:Drivers/CMSIS/Include/cmsis_gcc.h **** }
+ 335              		.loc 2 60 0
+ 336              		.syntax unified
+ 337              	@ 60 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 338 0010 62B6     		cpsie i
+ 339              	@ 0 "" 2
+ 340              		.thumb
+ 341              		.syntax unified
+ 342              	.LBE21:
+ 343              	.LBE20:
+ 140:src/hallinterrupts.c ****     __enable_irq();
+ 141:src/hallinterrupts.c ****     memset((void *)&HallData, 0, sizeof(HallData));
+ 344              		.loc 1 141 0
+ 345 0012 174C     		ldr	r4, .L15+8
+ 346 0014 4022     		movs	r2, #64
+ 347 0016 0021     		movs	r1, #0
+ 348 0018 2046     		mov	r0, r4
+ 349 001a FFF7FEFF 		bl	memset
+ 350              	.LVL29:
+ 142:src/hallinterrupts.c ****     memset((void *)&local_hall_params, 0, sizeof(local_hall_params));
+ 351              		.loc 1 142 0
+ 352 001e 154D     		ldr	r5, .L15+12
+ 353 0020 6022     		movs	r2, #96
+ 354 0022 0021     		movs	r1, #0
+ 355 0024 2846     		mov	r0, r5
+ 356 0026 FFF7FEFF 		bl	memset
+ 357              	.LVL30:
+ 143:src/hallinterrupts.c ****     local_hall_params[0].direction = -1;
+ 358              		.loc 1 143 0
+ 359 002a 4FF0FF33 		mov	r3, #-1
+ 360 002e AB62     		str	r3, [r5, #40]
+ 144:src/hallinterrupts.c ****     local_hall_params[1].direction = 1;
+ARM GAS  /tmp/ccOwJEX4.s 			page 11
+
+
+ 361              		.loc 1 144 0
+ 362 0030 0123     		movs	r3, #1
+ 363 0032 AB65     		str	r3, [r5, #88]
+ 145:src/hallinterrupts.c **** 
+ 146:src/hallinterrupts.c ****     HallData[0].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 364              		.loc 1 146 0
+ 365 0034 104B     		ldr	r3, .L15+16
+ 366 0036 1868     		ldr	r0, [r3]	@ float
+ 367 0038 FFF7FEFF 		bl	__aeabi_f2d
+ 368              	.LVL31:
+ 369 003c 0AA3     		adr	r3, .L15
+ 370 003e D3E90023 		ldrd	r2, [r3]
+ 371 0042 FFF7FEFF 		bl	__aeabi_dmul
+ 372              	.LVL32:
+ 373 0046 0022     		movs	r2, #0
+ 374 0048 0C4B     		ldr	r3, .L15+20
+ 375 004a FFF7FEFF 		bl	__aeabi_ddiv
+ 376              	.LVL33:
+ 377 004e FFF7FEFF 		bl	__aeabi_d2f
+ 378              	.LVL34:
+ 379 0052 A060     		str	r0, [r4, #8]	@ float
+ 147:src/hallinterrupts.c ****     HallData[1].HallPosnMultiplier = (float)((WheelSize_mm*3.14159265359)/(float)HALL_POSN_PER_REV)
+ 380              		.loc 1 147 0
+ 381 0054 A062     		str	r0, [r4, #40]	@ float
+ 148:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+ 382              		.loc 1 148 0
+ 383 0056 1720     		movs	r0, #23
+ 384 0058 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 385              	.LVL35:
+ 149:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+ 386              		.loc 1 149 0
+ 387 005c 2820     		movs	r0, #40
+ 388 005e FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 389              	.LVL36:
+ 150:src/hallinterrupts.c **** }
+ 390              		.loc 1 150 0
+ 391 0062 38BD     		pop	{r3, r4, r5, pc}
+ 392              	.L16:
+ 393 0064 AFF30080 		.align	3
+ 394              	.L15:
+ 395 0068 EA2E4454 		.word	1413754602
+ 396 006c FB210940 		.word	1074340347
+ 397 0070 00000000 		.word	HallData
+ 398 0074 00000000 		.word	local_hall_params
+ 399 0078 00000000 		.word	.LANCHOR0
+ 400 007c 00805640 		.word	1079410688
+ 401              		.cfi_endproc
+ 402              	.LFE69:
+ 404              		.section	.text.HallInterruptReadPosn,"ax",%progbits
+ 405              		.align	1
+ 406              		.global	HallInterruptReadPosn
+ 407              		.syntax unified
+ 408              		.thumb
+ 409              		.thumb_func
+ 410              		.fpu softvfp
+ 412              	HallInterruptReadPosn:
+ 413              	.LFB70:
+ARM GAS  /tmp/ccOwJEX4.s 			page 12
+
+
+ 151:src/hallinterrupts.c **** 
+ 152:src/hallinterrupts.c **** 
+ 153:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+ 154:src/hallinterrupts.c **** // read values with interupts disabled
+ 155:src/hallinterrupts.c **** // optionally reset posn to zero.
+ 156:src/hallinterrupts.c **** //
+ 157:src/hallinterrupts.c **** void HallInterruptReadPosn( HALL_POSN *p, int Reset ){
+ 414              		.loc 1 157 0
+ 415              		.cfi_startproc
+ 416              		@ args = 0, pretend = 0, frame = 0
+ 417              		@ frame_needed = 0, uses_anonymous_args = 0
+ 418              	.LVL37:
+ 419 0000 70B5     		push	{r4, r5, r6, lr}
+ 420              	.LCFI6:
+ 421              		.cfi_def_cfa_offset 16
+ 422              		.cfi_offset 4, -16
+ 423              		.cfi_offset 5, -12
+ 424              		.cfi_offset 6, -8
+ 425              		.cfi_offset 14, -4
+ 426 0002 0446     		mov	r4, r0
+ 427 0004 0D46     		mov	r5, r1
+ 428              	.LBB22:
+ 429              	.LBB23:
+ 430              		.loc 2 71 0
+ 431              		.syntax unified
+ 432              	@ 71 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 433 0006 72B6     		cpsid i
+ 434              	@ 0 "" 2
+ 435              		.thumb
+ 436              		.syntax unified
+ 437              	.LBE23:
+ 438              	.LBE22:
+ 158:src/hallinterrupts.c ****     __disable_irq(); // but we want both values at the same time, without interferance
+ 159:src/hallinterrupts.c ****     HAL_NVIC_DisableIRQ(EXTI9_5_IRQn);
+ 439              		.loc 1 159 0
+ 440 0008 1720     		movs	r0, #23
+ 441              	.LVL38:
+ 442 000a FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 443              	.LVL39:
+ 160:src/hallinterrupts.c ****     HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
+ 444              		.loc 1 160 0
+ 445 000e 2820     		movs	r0, #40
+ 446 0010 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 447              	.LVL40:
+ 448              	.LBB24:
+ 449              	.LBB25:
+  60:Drivers/CMSIS/Include/cmsis_gcc.h **** }
+ 450              		.loc 2 60 0
+ 451              		.syntax unified
+ 452              	@ 60 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 453 0014 62B6     		cpsie i
+ 454              	@ 0 "" 2
+ 455              	.LVL41:
+ 456              		.thumb
+ 457              		.syntax unified
+ 458              	.LBE25:
+ 459              	.LBE24:
+ARM GAS  /tmp/ccOwJEX4.s 			page 13
+
+
+ 460              	.LBB26:
+ 161:src/hallinterrupts.c ****     __enable_irq();
+ 162:src/hallinterrupts.c ****     for (int i = 0; i < 2; i++){
+ 461              		.loc 1 162 0
+ 462 0016 0023     		movs	r3, #0
+ 463 0018 00E0     		b	.L18
+ 464              	.LVL42:
+ 465              	.L19:
+ 466              		.loc 1 162 0 is_stmt 0 discriminator 2
+ 467 001a 0133     		adds	r3, r3, #1
+ 468              	.LVL43:
+ 469              	.L18:
+ 470              		.loc 1 162 0 discriminator 1
+ 471 001c 012B     		cmp	r3, #1
+ 472 001e 19DC     		bgt	.L22
+ 163:src/hallinterrupts.c ****         p->wheel[i].HallPosn = HallData[i].HallPosn;
+ 473              		.loc 1 163 0 is_stmt 1
+ 474 0020 1048     		ldr	r0, .L23
+ 475 0022 5A01     		lsls	r2, r3, #5
+ 476 0024 8118     		adds	r1, r0, r2
+ 477 0026 8658     		ldr	r6, [r0, r2]
+ 478 0028 9A00     		lsls	r2, r3, #2
+ 479 002a 1A44     		add	r2, r2, r3
+ 480 002c 9000     		lsls	r0, r2, #2
+ 481 002e 2218     		adds	r2, r4, r0
+ 482 0030 2650     		str	r6, [r4, r0]
+ 164:src/hallinterrupts.c ****         p->wheel[i].HallPosn_mm = HallData[i].HallPosn_mm;
+ 483              		.loc 1 164 0
+ 484 0032 C868     		ldr	r0, [r1, #12]
+ 485 0034 9060     		str	r0, [r2, #8]
+ 165:src/hallinterrupts.c ****         p->wheel[i].HallSpeed = HallData[i].HallSpeed;
+ 486              		.loc 1 165 0
+ 487 0036 4868     		ldr	r0, [r1, #4]
+ 488 0038 5060     		str	r0, [r2, #4]
+ 166:src/hallinterrupts.c ****         p->wheel[i].HallSpeed_mm_per_s = HallData[i].HallSpeed_mm_per_s;
+ 489              		.loc 1 166 0
+ 490 003a 4869     		ldr	r0, [r1, #20]
+ 491 003c D060     		str	r0, [r2, #12]
+ 167:src/hallinterrupts.c ****         p->wheel[i].HallSkipped = HallData[i].HallSkipped;
+ 492              		.loc 1 167 0
+ 493 003e C969     		ldr	r1, [r1, #28]
+ 494 0040 1161     		str	r1, [r2, #16]
+ 168:src/hallinterrupts.c **** 
+ 169:src/hallinterrupts.c ****         if (Reset){
+ 495              		.loc 1 169 0
+ 496 0042 002D     		cmp	r5, #0
+ 497 0044 E9D0     		beq	.L19
+ 170:src/hallinterrupts.c ****             HallData[i].HallPosn = 0;
+ 498              		.loc 1 170 0
+ 499 0046 0748     		ldr	r0, .L23
+ 500 0048 5901     		lsls	r1, r3, #5
+ 501 004a 4618     		adds	r6, r0, r1
+ 502 004c 0022     		movs	r2, #0
+ 503 004e 4250     		str	r2, [r0, r1]
+ 171:src/hallinterrupts.c ****             HallData[i].HallPosn_mm = 0;
+ 504              		.loc 1 171 0
+ 505 0050 F260     		str	r2, [r6, #12]
+ARM GAS  /tmp/ccOwJEX4.s 			page 14
+
+
+ 506 0052 E2E7     		b	.L19
+ 507              	.L22:
+ 508              	.LBE26:
+ 172:src/hallinterrupts.c ****         }
+ 173:src/hallinterrupts.c ****     }
+ 174:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+ 509              		.loc 1 174 0
+ 510 0054 1720     		movs	r0, #23
+ 511 0056 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 512              	.LVL44:
+ 175:src/hallinterrupts.c ****     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+ 513              		.loc 1 175 0
+ 514 005a 2820     		movs	r0, #40
+ 515 005c FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 516              	.LVL45:
+ 176:src/hallinterrupts.c **** }
+ 517              		.loc 1 176 0
+ 518 0060 70BD     		pop	{r4, r5, r6, pc}
+ 519              	.LVL46:
+ 520              	.L24:
+ 521 0062 00BF     		.align	2
+ 522              	.L23:
+ 523 0064 00000000 		.word	HallData
+ 524              		.cfi_endproc
+ 525              	.LFE70:
+ 527              		.global	__aeabi_i2f
+ 528              		.global	__aeabi_f2iz
+ 529              		.global	__aeabi_fmul
+ 530              		.global	__aeabi_ui2f
+ 531              		.global	__aeabi_d2iz
+ 532              		.global	__aeabi_fdiv
+ 533              		.section	.text.HallInterruptsInterrupt,"ax",%progbits
+ 534              		.align	1
+ 535              		.global	HallInterruptsInterrupt
+ 536              		.syntax unified
+ 537              		.thumb
+ 538              		.thumb_func
+ 539              		.fpu softvfp
+ 541              	HallInterruptsInterrupt:
+ 542              	.LFB71:
+ 177:src/hallinterrupts.c **** 
+ 178:src/hallinterrupts.c **** 
+ 179:src/hallinterrupts.c **** 
+ 180:src/hallinterrupts.c **** //////////////////////////////////////////////////////////////
+ 181:src/hallinterrupts.c **** // the hall sensors change 1 bit at a time.
+ 182:src/hallinterrupts.c **** // the transtion tells us the direction of movement.
+ 183:src/hallinterrupts.c **** // this table is [last hall value][new hall value], and gives the
+ 184:src/hallinterrupts.c **** // direction of movement.
+ 185:src/hallinterrupts.c **** // table values of 0 represent 'illegal' transitions -
+ 186:src/hallinterrupts.c **** // i.e. if we see a 0 out, then we missed an interrupt
+ 187:src/hallinterrupts.c **** // (never seen in practice yet)
+ 188:src/hallinterrupts.c **** static const int increments[7][7] =
+ 189:src/hallinterrupts.c **** {
+ 190:src/hallinterrupts.c ****     {  0,  0,  0,  0,  0,  0,  0 },
+ 191:src/hallinterrupts.c ****     {  0,  0,  0, -1,  0,  1,  0 },
+ 192:src/hallinterrupts.c ****     {  0,  0,  0,  1,  0,  0, -1 },
+ 193:src/hallinterrupts.c ****     {  0,  1, -1,  0,  0,  0,  0 },
+ARM GAS  /tmp/ccOwJEX4.s 			page 15
+
+
+ 194:src/hallinterrupts.c ****     {  0,  0,  0,  0,  0, -1,  1 },
+ 195:src/hallinterrupts.c ****     {  0, -1,  0,  0,  1,  0,  0 },
+ 196:src/hallinterrupts.c ****     {  0,  0,  1,  0, -1,  0,  0 },
+ 197:src/hallinterrupts.c **** };
+ 198:src/hallinterrupts.c **** 
+ 199:src/hallinterrupts.c **** 
+ 200:src/hallinterrupts.c **** 
+ 201:src/hallinterrupts.c **** /////////////////////////////////////////////////////////////////////
+ 202:src/hallinterrupts.c **** // called from rising and falling edge interrupts off hall GPIO pins.
+ 203:src/hallinterrupts.c **** // reads all hall sensors, and calculates posn & speed.
+ 204:src/hallinterrupts.c **** void HallInterruptsInterrupt(void){
+ 543              		.loc 1 204 0
+ 544              		.cfi_startproc
+ 545              		@ args = 0, pretend = 0, frame = 8
+ 546              		@ frame_needed = 0, uses_anonymous_args = 0
+ 547 0000 2DE9F04F 		push	{r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 548              	.LCFI7:
+ 549              		.cfi_def_cfa_offset 36
+ 550              		.cfi_offset 4, -36
+ 551              		.cfi_offset 5, -32
+ 552              		.cfi_offset 6, -28
+ 553              		.cfi_offset 7, -24
+ 554              		.cfi_offset 8, -20
+ 555              		.cfi_offset 9, -16
+ 556              		.cfi_offset 10, -12
+ 557              		.cfi_offset 11, -8
+ 558              		.cfi_offset 14, -4
+ 559 0004 83B0     		sub	sp, sp, #12
+ 560              	.LCFI8:
+ 561              		.cfi_def_cfa_offset 48
+ 562              	.LBB27:
+ 563              	.LBB28:
+ 564              		.loc 2 71 0
+ 565              		.syntax unified
+ 566              	@ 71 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 567 0006 72B6     		cpsid i
+ 568              	@ 0 "" 2
+ 569              		.thumb
+ 570              		.syntax unified
+ 571              	.LBE28:
+ 572              	.LBE27:
+ 205:src/hallinterrupts.c ****     // we only want the count from this 100khz clock
+ 206:src/hallinterrupts.c ****     __disable_irq(); // but we want both values at the same time, without interferance
+ 207:src/hallinterrupts.c ****     unsigned long time = h_timer_hall.Instance->CNT;
+ 573              		.loc 1 207 0
+ 574 0008 5D4B     		ldr	r3, .L33
+ 575 000a 1B68     		ldr	r3, [r3]
+ 576 000c 5D6A     		ldr	r5, [r3, #36]
+ 577              	.LVL47:
+ 208:src/hallinterrupts.c ****     long long timerwraps_copy = timerwraps;
+ 578              		.loc 1 208 0
+ 579 000e 5D4B     		ldr	r3, .L33+4
+ 580 0010 D3E90067 		ldrd	r6, [r3]
+ 581              	.LVL48:
+ 209:src/hallinterrupts.c **** #ifdef SWITCH_WHEELS
+ 210:src/hallinterrupts.c ****     local_hall_params[1].hall = (~(LEFT_HALL_U_PORT->IDR & (LEFT_HALL_U_PIN | LEFT_HALL_V_PIN | LEF
+ 211:src/hallinterrupts.c ****     local_hall_params[0].hall = (~(RIGHT_HALL_U_PORT->IDR & (RIGHT_HALL_U_PIN | RIGHT_HALL_V_PIN | 
+ARM GAS  /tmp/ccOwJEX4.s 			page 16
+
+
+ 212:src/hallinterrupts.c **** #else
+ 213:src/hallinterrupts.c ****     local_hall_params[0].hall = (~(LEFT_HALL_U_PORT->IDR & (LEFT_HALL_U_PIN | LEFT_HALL_V_PIN | LEF
+ 582              		.loc 1 213 0
+ 583 0014 5C4B     		ldr	r3, .L33+8
+ 584 0016 9B68     		ldr	r3, [r3, #8]
+ 585 0018 03F0E003 		and	r3, r3, #224
+ 586 001c DB43     		mvns	r3, r3
+ 587 001e C3F34213 		ubfx	r3, r3, #5, #3
+ 588 0022 5A4A     		ldr	r2, .L33+12
+ 589 0024 D370     		strb	r3, [r2, #3]
+ 214:src/hallinterrupts.c ****     local_hall_params[1].hall = (~(RIGHT_HALL_U_PORT->IDR & (RIGHT_HALL_U_PIN | RIGHT_HALL_V_PIN | 
+ 590              		.loc 1 214 0
+ 591 0026 5A4B     		ldr	r3, .L33+16
+ 592 0028 9B68     		ldr	r3, [r3, #8]
+ 593 002a 03F4E053 		and	r3, r3, #7168
+ 594 002e DB43     		mvns	r3, r3
+ 595 0030 C3F38223 		ubfx	r3, r3, #10, #3
+ 596 0034 82F83330 		strb	r3, [r2, #51]
+ 597              	.LBB29:
+ 598              	.LBB30:
+  60:Drivers/CMSIS/Include/cmsis_gcc.h **** }
+ 599              		.loc 2 60 0
+ 600              		.syntax unified
+ 601              	@ 60 "Drivers/CMSIS/Include/cmsis_gcc.h" 1
+ 602 0038 62B6     		cpsie i
+ 603              	@ 0 "" 2
+ 604              	.LVL49:
+ 605              		.thumb
+ 606              		.syntax unified
+ 607              	.LBE30:
+ 608              	.LBE29:
+ 609              	.LBB31:
+ 215:src/hallinterrupts.c **** #endif
+ 216:src/hallinterrupts.c ****     __enable_irq();
+ 217:src/hallinterrupts.c **** 
+ 218:src/hallinterrupts.c ****     for (int i = 0; i < 2; i++){
+ 610              		.loc 1 218 0
+ 611 003a 0024     		movs	r4, #0
+ 612 003c 12E0     		b	.L26
+ 613              	.LVL50:
+ 614              	.L29:
+ 615              	.LBB32:
+ 219:src/hallinterrupts.c ****         // if this wheel change hall input
+ 220:src/hallinterrupts.c ****         if (local_hall_params[i].last_hall != local_hall_params[i].hall){
+ 221:src/hallinterrupts.c ****             if (local_hall_params[i].last_hall == 0){
+ 222:src/hallinterrupts.c ****                 // valid startup condition
+ 223:src/hallinterrupts.c ****             } else {
+ 224:src/hallinterrupts.c ****                 local_hall_params[i].zerospeedtimeout = 5; // number of timer wraps to after which 
+ 225:src/hallinterrupts.c ****                 local_hall_params[i].hall_time = (timerwraps_copy << 16) | time;
+ 226:src/hallinterrupts.c ****                 long long dt = local_hall_params[i].hall_time - local_hall_params[i].last_hall_time
+ 227:src/hallinterrupts.c **** 
+ 228:src/hallinterrupts.c ****                 // note correction of direction for left wheel
+ 229:src/hallinterrupts.c ****                 local_hall_params[i].incr =
+ 230:src/hallinterrupts.c ****                     increments[local_hall_params[i].last_hall][local_hall_params[i].hall] *
+ 231:src/hallinterrupts.c ****                     local_hall_params[i].direction;
+ 232:src/hallinterrupts.c **** 
+ 233:src/hallinterrupts.c ****                 HallData[i].HallPosn = HallData[i].HallPosn + local_hall_params[i].incr;
+ARM GAS  /tmp/ccOwJEX4.s 			page 17
+
+
+ 234:src/hallinterrupts.c ****                 HallData[i].HallPosn_mm = (int)((float)HallData[i].HallPosn)*HallData[i].HallPosnMu
+ 235:src/hallinterrupts.c ****                 HallData[i].HallTimeDiff = (unsigned long)dt;
+ 236:src/hallinterrupts.c **** 
+ 237:src/hallinterrupts.c ****                 if (local_hall_params[i].incr != 0){
+ 238:src/hallinterrupts.c ****                     // speed = distance/time
+ 239:src/hallinterrupts.c ****                     // in this case, distance is always 1.
+ 240:src/hallinterrupts.c ****                     // and time is between 10 and 65535
+ 241:src/hallinterrupts.c ****                     HallData[i].HallSpeed = (int)
+ 242:src/hallinterrupts.c ****                         (HALL_SPEED_CALIBRATION/(float)HallData[i].HallTimeDiff) *
+ 243:src/hallinterrupts.c ****                         local_hall_params[i].incr;
+ 244:src/hallinterrupts.c **** 
+ 245:src/hallinterrupts.c ****                     HallData[i].HallSpeed_mm_per_s = (int)
+ 246:src/hallinterrupts.c ****                         ((float)(HallData[i].HallPosnMultiplier/(float)HallData[i].HallTimeDiff) *
+ 247:src/hallinterrupts.c ****                         (float)local_hall_params[i].incr *
+ 248:src/hallinterrupts.c ****                         (float)HALL_INTERRUPT_TIMER_FREQ);
+ 249:src/hallinterrupts.c ****                 } else {
+ 250:src/hallinterrupts.c ****                     // we missed a transition?
+ 251:src/hallinterrupts.c ****                     HallData[i].HallSkipped ++;
+ 616              		.loc 1 251 0
+ 617 003e 554B     		ldr	r3, .L33+20
+ 618 0040 03EB4413 		add	r3, r3, r4, lsl #5
+ 619 0044 DA69     		ldr	r2, [r3, #28]
+ 620 0046 0132     		adds	r2, r2, #1
+ 621 0048 DA61     		str	r2, [r3, #28]
+ 622              	.L28:
+ 623              	.LBE32:
+ 252:src/hallinterrupts.c ****                 }
+ 253:src/hallinterrupts.c ****             }
+ 254:src/hallinterrupts.c **** 
+ 255:src/hallinterrupts.c ****             // remember for next round
+ 256:src/hallinterrupts.c ****             local_hall_params[i].last_hall = local_hall_params[i].hall;
+ 624              		.loc 1 256 0
+ 625 004a 6200     		lsls	r2, r4, #1
+ 626 004c 2244     		add	r2, r2, r4
+ 627 004e 1101     		lsls	r1, r2, #4
+ 628 0050 4E4B     		ldr	r3, .L33+12
+ 629 0052 0B44     		add	r3, r3, r1
+ 630 0054 DA78     		ldrb	r2, [r3, #3]	@ zero_extendqisi2
+ 631 0056 D2B2     		uxtb	r2, r2
+ 632 0058 1A71     		strb	r2, [r3, #4]
+ 257:src/hallinterrupts.c ****             local_hall_params[i].last_hall_time = local_hall_params[i].hall_time;
+ 633              		.loc 1 257 0
+ 634 005a D3E90201 		ldrd	r0, [r3, #8]
+ 635 005e C3E90401 		strd	r0, [r3, #16]
+ 636              	.L27:
+ 218:src/hallinterrupts.c ****         // if this wheel change hall input
+ 637              		.loc 1 218 0 discriminator 2
+ 638 0062 0134     		adds	r4, r4, #1
+ 639              	.LVL51:
+ 640              	.L26:
+ 218:src/hallinterrupts.c ****         // if this wheel change hall input
+ 641              		.loc 1 218 0 is_stmt 0 discriminator 1
+ 642 0064 012C     		cmp	r4, #1
+ 643 0066 00F38880 		bgt	.L32
+ 220:src/hallinterrupts.c ****             if (local_hall_params[i].last_hall == 0){
+ 644              		.loc 1 220 0 is_stmt 1
+ 645 006a 6200     		lsls	r2, r4, #1
+ARM GAS  /tmp/ccOwJEX4.s 			page 18
+
+
+ 646 006c 2244     		add	r2, r2, r4
+ 647 006e 1101     		lsls	r1, r2, #4
+ 648 0070 464B     		ldr	r3, .L33+12
+ 649 0072 0B44     		add	r3, r3, r1
+ 650 0074 1A79     		ldrb	r2, [r3, #4]	@ zero_extendqisi2
+ 651 0076 D2B2     		uxtb	r2, r2
+ 652 0078 DB78     		ldrb	r3, [r3, #3]	@ zero_extendqisi2
+ 653 007a DBB2     		uxtb	r3, r3
+ 654 007c 9A42     		cmp	r2, r3
+ 655 007e F0D0     		beq	.L27
+ 221:src/hallinterrupts.c ****                 // valid startup condition
+ 656              		.loc 1 221 0
+ 657 0080 424B     		ldr	r3, .L33+12
+ 658 0082 0B44     		add	r3, r3, r1
+ 659 0084 1B79     		ldrb	r3, [r3, #4]	@ zero_extendqisi2
+ 660 0086 002B     		cmp	r3, #0
+ 661 0088 DFD0     		beq	.L28
+ 662              	.LBB33:
+ 224:src/hallinterrupts.c ****                 local_hall_params[i].hall_time = (timerwraps_copy << 16) | time;
+ 663              		.loc 1 224 0
+ 664 008a 404B     		ldr	r3, .L33+12
+ 665 008c 03EB010A 		add	r10, r3, r1
+ 666 0090 0523     		movs	r3, #5
+ 667 0092 CAF82430 		str	r3, [r10, #36]
+ 225:src/hallinterrupts.c ****                 long long dt = local_hall_params[i].hall_time - local_hall_params[i].last_hall_time
+ 668              		.loc 1 225 0
+ 669 0096 3904     		lsls	r1, r7, #16
+ 670 0098 41EA1641 		orr	r1, r1, r6, lsr #16
+ 671 009c 3004     		lsls	r0, r6, #16
+ 672 009e 40EA0502 		orr	r2, r0, r5
+ 673 00a2 0B46     		mov	r3, r1
+ 674 00a4 CAE90223 		strd	r2, [r10, #8]
+ 226:src/hallinterrupts.c **** 
+ 675              		.loc 1 226 0
+ 676 00a8 DAE90201 		ldrd	r0, [r10, #8]
+ 677 00ac DAE90423 		ldrd	r2, [r10, #16]
+ 678 00b0 801A     		subs	r0, r0, r2
+ 679 00b2 8046     		mov	r8, r0
+ 230:src/hallinterrupts.c ****                     local_hall_params[i].direction;
+ 680              		.loc 1 230 0
+ 681 00b4 9AF80430 		ldrb	r3, [r10, #4]	@ zero_extendqisi2
+ 682 00b8 9AF80320 		ldrb	r2, [r10, #3]	@ zero_extendqisi2
+ 683 00bc C3EBC303 		rsb	r3, r3, r3, lsl #3
+ 684 00c0 1344     		add	r3, r3, r2
+ 685 00c2 354A     		ldr	r2, .L33+24
+ 686 00c4 52F82320 		ldr	r2, [r2, r3, lsl #2]
+ 231:src/hallinterrupts.c **** 
+ 687              		.loc 1 231 0
+ 688 00c8 DAF82830 		ldr	r3, [r10, #40]
+ 230:src/hallinterrupts.c ****                     local_hall_params[i].direction;
+ 689              		.loc 1 230 0
+ 690 00cc 03FB02F3 		mul	r3, r3, r2
+ 229:src/hallinterrupts.c ****                     increments[local_hall_params[i].last_hall][local_hall_params[i].hall] *
+ 691              		.loc 1 229 0
+ 692 00d0 CAF82030 		str	r3, [r10, #32]
+ 233:src/hallinterrupts.c ****                 HallData[i].HallPosn_mm = (int)((float)HallData[i].HallPosn)*HallData[i].HallPosnMu
+ 693              		.loc 1 233 0
+ARM GAS  /tmp/ccOwJEX4.s 			page 19
+
+
+ 694 00d4 2F4A     		ldr	r2, .L33+20
+ 695 00d6 6301     		lsls	r3, r4, #5
+ 696 00d8 D118     		adds	r1, r2, r3
+ 697 00da 0191     		str	r1, [sp, #4]
+ 698 00dc D158     		ldr	r1, [r2, r3]
+ 699 00de DAF82000 		ldr	r0, [r10, #32]
+ 700 00e2 0144     		add	r1, r1, r0
+ 701 00e4 D150     		str	r1, [r2, r3]
+ 234:src/hallinterrupts.c ****                 HallData[i].HallTimeDiff = (unsigned long)dt;
+ 702              		.loc 1 234 0
+ 703 00e6 D058     		ldr	r0, [r2, r3]
+ 704 00e8 FFF7FEFF 		bl	__aeabi_i2f
+ 705              	.LVL52:
+ 706 00ec FFF7FEFF 		bl	__aeabi_f2iz
+ 707              	.LVL53:
+ 708 00f0 019A     		ldr	r2, [sp, #4]
+ 709 00f2 D2F808B0 		ldr	fp, [r2, #8]	@ float
+ 710 00f6 FFF7FEFF 		bl	__aeabi_i2f
+ 711              	.LVL54:
+ 712 00fa 5946     		mov	r1, fp
+ 713 00fc FFF7FEFF 		bl	__aeabi_fmul
+ 714              	.LVL55:
+ 715 0100 FFF7FEFF 		bl	__aeabi_f2iz
+ 716              	.LVL56:
+ 717 0104 019B     		ldr	r3, [sp, #4]
+ 718 0106 D860     		str	r0, [r3, #12]
+ 235:src/hallinterrupts.c **** 
+ 719              		.loc 1 235 0
+ 720 0108 C3F81880 		str	r8, [r3, #24]
+ 237:src/hallinterrupts.c ****                     // speed = distance/time
+ 721              		.loc 1 237 0
+ 722 010c DAF82030 		ldr	r3, [r10, #32]
+ 723 0110 002B     		cmp	r3, #0
+ 724 0112 94D0     		beq	.L29
+ 242:src/hallinterrupts.c ****                         local_hall_params[i].incr;
+ 725              		.loc 1 242 0
+ 726 0114 1F4B     		ldr	r3, .L33+20
+ 727 0116 03EB4418 		add	r8, r3, r4, lsl #5
+ 728 011a D8F81800 		ldr	r0, [r8, #24]
+ 729 011e FFF7FEFF 		bl	__aeabi_ui2f
+ 730              	.LVL57:
+ 731 0122 FFF7FEFF 		bl	__aeabi_f2d
+ 732              	.LVL58:
+ 733 0126 0246     		mov	r2, r0
+ 734 0128 0B46     		mov	r3, r1
+ 735 012a 0020     		movs	r0, #0
+ 736 012c 1B49     		ldr	r1, .L33+28
+ 737 012e FFF7FEFF 		bl	__aeabi_ddiv
+ 738              	.LVL59:
+ 241:src/hallinterrupts.c ****                         (HALL_SPEED_CALIBRATION/(float)HallData[i].HallTimeDiff) *
+ 739              		.loc 1 241 0
+ 740 0132 FFF7FEFF 		bl	__aeabi_d2iz
+ 741              	.LVL60:
+ 243:src/hallinterrupts.c **** 
+ 742              		.loc 1 243 0
+ 743 0136 D146     		mov	r9, r10
+ 744 0138 DAF82030 		ldr	r3, [r10, #32]
+ARM GAS  /tmp/ccOwJEX4.s 			page 20
+
+
+ 242:src/hallinterrupts.c ****                         local_hall_params[i].incr;
+ 745              		.loc 1 242 0
+ 746 013c 03FB00F0 		mul	r0, r3, r0
+ 241:src/hallinterrupts.c ****                         (HALL_SPEED_CALIBRATION/(float)HallData[i].HallTimeDiff) *
+ 747              		.loc 1 241 0
+ 748 0140 C8F80400 		str	r0, [r8, #4]
+ 246:src/hallinterrupts.c ****                         (float)local_hall_params[i].incr *
+ 749              		.loc 1 246 0
+ 750 0144 D8F808A0 		ldr	r10, [r8, #8]	@ float
+ 751 0148 D8F81800 		ldr	r0, [r8, #24]
+ 752 014c FFF7FEFF 		bl	__aeabi_ui2f
+ 753              	.LVL61:
+ 754 0150 0146     		mov	r1, r0
+ 755 0152 5046     		mov	r0, r10
+ 756 0154 FFF7FEFF 		bl	__aeabi_fdiv
+ 757              	.LVL62:
+ 758 0158 8246     		mov	r10, r0
+ 247:src/hallinterrupts.c ****                         (float)HALL_INTERRUPT_TIMER_FREQ);
+ 759              		.loc 1 247 0
+ 760 015a D9F82000 		ldr	r0, [r9, #32]
+ 761 015e FFF7FEFF 		bl	__aeabi_i2f
+ 762              	.LVL63:
+ 246:src/hallinterrupts.c ****                         (float)local_hall_params[i].incr *
+ 763              		.loc 1 246 0
+ 764 0162 0146     		mov	r1, r0
+ 765 0164 5046     		mov	r0, r10
+ 766 0166 FFF7FEFF 		bl	__aeabi_fmul
+ 767              	.LVL64:
+ 247:src/hallinterrupts.c ****                         (float)HALL_INTERRUPT_TIMER_FREQ);
+ 768              		.loc 1 247 0
+ 769 016a 0D49     		ldr	r1, .L33+32
+ 770 016c FFF7FEFF 		bl	__aeabi_fmul
+ 771              	.LVL65:
+ 245:src/hallinterrupts.c ****                         ((float)(HallData[i].HallPosnMultiplier/(float)HallData[i].HallTimeDiff) *
+ 772              		.loc 1 245 0
+ 773 0170 FFF7FEFF 		bl	__aeabi_f2iz
+ 774              	.LVL66:
+ 775 0174 C8F81400 		str	r0, [r8, #20]
+ 776 0178 67E7     		b	.L28
+ 777              	.L32:
+ 778              	.LBE33:
+ 779              	.LBE31:
+ 258:src/hallinterrupts.c ****         }
+ 259:src/hallinterrupts.c ****     }
+ 260:src/hallinterrupts.c **** }
+ 780              		.loc 1 260 0
+ 781 017a 03B0     		add	sp, sp, #12
+ 782              	.LCFI9:
+ 783              		.cfi_def_cfa_offset 36
+ 784              		@ sp needed
+ 785 017c BDE8F08F 		pop	{r4, r5, r6, r7, r8, r9, r10, fp, pc}
+ 786              	.LVL67:
+ 787              	.L34:
+ 788              		.align	2
+ 789              	.L33:
+ 790 0180 00000000 		.word	h_timer_hall
+ 791 0184 00000000 		.word	.LANCHOR1
+ARM GAS  /tmp/ccOwJEX4.s 			page 21
+
+
+ 792 0188 000C0140 		.word	1073810432
+ 793 018c 00000000 		.word	local_hall_params
+ 794 0190 00100140 		.word	1073811456
+ 795 0194 00000000 		.word	HallData
+ 796 0198 00000000 		.word	.LANCHOR2
+ 797 019c 00400F41 		.word	1091518464
+ 798 01a0 0050C347 		.word	1203982336
+ 799              		.cfi_endproc
+ 800              	.LFE71:
+ 802              		.section	.text.TIM4_IRQHandler,"ax",%progbits
+ 803              		.align	1
+ 804              		.global	TIM4_IRQHandler
+ 805              		.syntax unified
+ 806              		.thumb
+ 807              		.thumb_func
+ 808              		.fpu softvfp
+ 810              	TIM4_IRQHandler:
+ 811              	.LFB72:
+ 261:src/hallinterrupts.c **** 
+ 262:src/hallinterrupts.c **** 
+ 263:src/hallinterrupts.c **** /////////////////////////////////////////////////////////////////////
+ 264:src/hallinterrupts.c **** // we keep track of timer wraps for accurate speed measurement.
+ 265:src/hallinterrupts.c **** // and also look for 'stopped'
+ 266:src/hallinterrupts.c **** void TIM4_IRQHandler(void){
+ 812              		.loc 1 266 0
+ 813              		.cfi_startproc
+ 814              		@ args = 0, pretend = 0, frame = 0
+ 815              		@ frame_needed = 0, uses_anonymous_args = 0
+ 816              		@ link register save eliminated.
+ 267:src/hallinterrupts.c ****     if (__HAL_TIM_GET_FLAG(&h_timer_hall, TIM_IT_UPDATE) != RESET){
+ 817              		.loc 1 267 0
+ 818 0000 1A4B     		ldr	r3, .L47
+ 819 0002 1B68     		ldr	r3, [r3]
+ 820 0004 1A69     		ldr	r2, [r3, #16]
+ 821 0006 12F0010F 		tst	r2, #1
+ 822 000a 2DD0     		beq	.L42
+ 266:src/hallinterrupts.c ****     if (__HAL_TIM_GET_FLAG(&h_timer_hall, TIM_IT_UPDATE) != RESET){
+ 823              		.loc 1 266 0
+ 824 000c 4DF804BD 		push	{fp}
+ 825              	.LCFI10:
+ 826              		.cfi_def_cfa_offset 4
+ 827              		.cfi_offset 11, -4
+ 268:src/hallinterrupts.c ****         __HAL_TIM_CLEAR_FLAG(&h_timer_hall, TIM_IT_UPDATE);
+ 828              		.loc 1 268 0
+ 829 0010 6FF00102 		mvn	r2, #1
+ 830 0014 1A61     		str	r2, [r3, #16]
+ 269:src/hallinterrupts.c ****         timerwraps++;
+ 831              		.loc 1 269 0
+ 832 0016 1649     		ldr	r1, .L47+4
+ 833 0018 D1E900BC 		ldrd	fp, [r1]
+ 834 001c 1BF10102 		adds	r2, fp, #1
+ 835 0020 4CF10003 		adc	r3, ip, #0
+ 836 0024 C1E90023 		strd	r2, [r1]
+ 837              	.LVL68:
+ 838              	.LBB34:
+ 270:src/hallinterrupts.c **** 
+ 271:src/hallinterrupts.c ****         for (int i = 0; i < 2; i++){
+ARM GAS  /tmp/ccOwJEX4.s 			page 22
+
+
+ 839              		.loc 1 271 0
+ 840 0028 0023     		movs	r3, #0
+ 841 002a 07E0     		b	.L37
+ 842              	.LVL69:
+ 843              	.L46:
+ 272:src/hallinterrupts.c ****             if (local_hall_params[i].zerospeedtimeout <= 0){
+ 273:src/hallinterrupts.c ****                 HallData[i].HallSpeed = 0;
+ 844              		.loc 1 273 0
+ 845 002c 114A     		ldr	r2, .L47+8
+ 846 002e 02EB4312 		add	r2, r2, r3, lsl #5
+ 847 0032 0021     		movs	r1, #0
+ 848 0034 5160     		str	r1, [r2, #4]
+ 274:src/hallinterrupts.c ****                 HallData[i].HallSpeed_mm_per_s = 0;
+ 849              		.loc 1 274 0
+ 850 0036 5161     		str	r1, [r2, #20]
+ 275:src/hallinterrupts.c ****                 HallData[i].HallTimeDiff = 0;
+ 851              		.loc 1 275 0
+ 852 0038 9161     		str	r1, [r2, #24]
+ 853              	.L39:
+ 271:src/hallinterrupts.c ****             if (local_hall_params[i].zerospeedtimeout <= 0){
+ 854              		.loc 1 271 0 discriminator 2
+ 855 003a 0133     		adds	r3, r3, #1
+ 856              	.LVL70:
+ 857              	.L37:
+ 271:src/hallinterrupts.c ****             if (local_hall_params[i].zerospeedtimeout <= 0){
+ 858              		.loc 1 271 0 is_stmt 0 discriminator 1
+ 859 003c 012B     		cmp	r3, #1
+ 860 003e 10DC     		bgt	.L45
+ 272:src/hallinterrupts.c ****                 HallData[i].HallSpeed = 0;
+ 861              		.loc 1 272 0 is_stmt 1
+ 862 0040 03EB4302 		add	r2, r3, r3, lsl #1
+ 863 0044 1101     		lsls	r1, r2, #4
+ 864 0046 0C4A     		ldr	r2, .L47+12
+ 865 0048 0A44     		add	r2, r2, r1
+ 866 004a 526A     		ldr	r2, [r2, #36]
+ 867 004c 002A     		cmp	r2, #0
+ 868 004e EDDD     		ble	.L46
+ 276:src/hallinterrupts.c ****             } else {
+ 277:src/hallinterrupts.c ****                 local_hall_params[i].zerospeedtimeout--;
+ 869              		.loc 1 277 0
+ 870 0050 5900     		lsls	r1, r3, #1
+ 871 0052 1944     		add	r1, r1, r3
+ 872 0054 0801     		lsls	r0, r1, #4
+ 873 0056 084A     		ldr	r2, .L47+12
+ 874 0058 0244     		add	r2, r2, r0
+ 875 005a 516A     		ldr	r1, [r2, #36]
+ 876 005c 0139     		subs	r1, r1, #1
+ 877 005e 5162     		str	r1, [r2, #36]
+ 878 0060 EBE7     		b	.L39
+ 879              	.L45:
+ 880              	.LBE34:
+ 278:src/hallinterrupts.c ****             }
+ 279:src/hallinterrupts.c ****         }
+ 280:src/hallinterrupts.c ****     }
+ 281:src/hallinterrupts.c **** }
+ 881              		.loc 1 281 0
+ 882 0062 5DF804BB 		ldr	fp, [sp], #4
+ARM GAS  /tmp/ccOwJEX4.s 			page 23
+
+
+ 883              	.LCFI11:
+ 884              		.cfi_restore 11
+ 885              		.cfi_def_cfa_offset 0
+ 886 0066 7047     		bx	lr
+ 887              	.LVL71:
+ 888              	.L42:
+ 889 0068 7047     		bx	lr
+ 890              	.L48:
+ 891 006a 00BF     		.align	2
+ 892              	.L47:
+ 893 006c 00000000 		.word	h_timer_hall
+ 894 0070 00000000 		.word	.LANCHOR1
+ 895 0074 00000000 		.word	HallData
+ 896 0078 00000000 		.word	local_hall_params
+ 897              		.cfi_endproc
+ 898              	.LFE72:
+ 900              		.global	timerwraps
+ 901              		.comm	local_hall_params,96,8
+ 902              		.comm	h_timer_hall,64,4
+ 903              		.comm	HallData,64,4
+ 904              		.section	.bss.timerwraps,"aw",%nobits
+ 905              		.align	3
+ 906              		.set	.LANCHOR1,. + 0
+ 909              	timerwraps:
+ 910 0000 00000000 		.space	8
+ 910      00000000 
+ 911              		.section	.data.WheelSize_mm,"aw",%progbits
+ 912              		.align	2
+ 913              		.set	.LANCHOR0,. + 0
+ 916              	WheelSize_mm:
+ 917 0000 9A192543 		.word	1126504858
+ 918              		.section	.rodata.increments,"a",%progbits
+ 919              		.align	2
+ 920              		.set	.LANCHOR2,. + 0
+ 923              	increments:
+ 924 0000 00000000 		.word	0
+ 925 0004 00000000 		.word	0
+ 926 0008 00000000 		.word	0
+ 927 000c 00000000 		.word	0
+ 928 0010 00000000 		.word	0
+ 929 0014 00000000 		.word	0
+ 930 0018 00000000 		.word	0
+ 931 001c 00000000 		.word	0
+ 932 0020 00000000 		.word	0
+ 933 0024 00000000 		.word	0
+ 934 0028 FFFFFFFF 		.word	-1
+ 935 002c 00000000 		.word	0
+ 936 0030 01000000 		.word	1
+ 937 0034 00000000 		.word	0
+ 938 0038 00000000 		.word	0
+ 939 003c 00000000 		.word	0
+ 940 0040 00000000 		.word	0
+ 941 0044 01000000 		.word	1
+ 942 0048 00000000 		.word	0
+ 943 004c 00000000 		.word	0
+ 944 0050 FFFFFFFF 		.word	-1
+ 945 0054 00000000 		.word	0
+ARM GAS  /tmp/ccOwJEX4.s 			page 24
+
+
+ 946 0058 01000000 		.word	1
+ 947 005c FFFFFFFF 		.word	-1
+ 948 0060 00000000 		.word	0
+ 949 0064 00000000 		.word	0
+ 950 0068 00000000 		.word	0
+ 951 006c 00000000 		.word	0
+ 952 0070 00000000 		.word	0
+ 953 0074 00000000 		.word	0
+ 954 0078 00000000 		.word	0
+ 955 007c 00000000 		.word	0
+ 956 0080 00000000 		.word	0
+ 957 0084 FFFFFFFF 		.word	-1
+ 958 0088 01000000 		.word	1
+ 959 008c 00000000 		.word	0
+ 960 0090 FFFFFFFF 		.word	-1
+ 961 0094 00000000 		.word	0
+ 962 0098 00000000 		.word	0
+ 963 009c 01000000 		.word	1
+ 964 00a0 00000000 		.word	0
+ 965 00a4 00000000 		.word	0
+ 966 00a8 00000000 		.word	0
+ 967 00ac 00000000 		.word	0
+ 968 00b0 01000000 		.word	1
+ 969 00b4 00000000 		.word	0
+ 970 00b8 FFFFFFFF 		.word	-1
+ 971 00bc 00000000 		.word	0
+ 972 00c0 00000000 		.word	0
+ 973              		.text
+ 974              	.Letext0:
+ 975              		.file 3 "/usr/arm-none-eabi/include/machine/_default_types.h"
+ 976              		.file 4 "/usr/arm-none-eabi/include/sys/_stdint.h"
+ 977              		.file 5 "Drivers/CMSIS/Include/core_cm3.h"
+ 978              		.file 6 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/system_stm32f1xx.h"
+ 979              		.file 7 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xe.h"
+ 980              		.file 8 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f1xx.h"
+ 981              		.file 9 "/usr/arm-none-eabi/include/sys/lock.h"
+ 982              		.file 10 "/usr/arm-none-eabi/include/sys/_types.h"
+ 983              		.file 11 "/usr/lib/gcc/arm-none-eabi/7.3.1/include/stddef.h"
+ 984              		.file 12 "/usr/arm-none-eabi/include/sys/reent.h"
+ 985              		.file 13 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h"
+ 986              		.file 14 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma.h"
+ 987              		.file 15 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h"
+ 988              		.file 16 "inc/hallinterrupts.h"
+ 989              		.file 17 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_cortex.h"
+ 990              		.file 18 "<built-in>"
+ARM GAS  /tmp/ccOwJEX4.s 			page 25
+
+
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 hallinterrupts.c
+     /tmp/ccOwJEX4.s:20     .text.HallInterruptinit:0000000000000000 $t
+     /tmp/ccOwJEX4.s:27     .text.HallInterruptinit:0000000000000000 HallInterruptinit
+     /tmp/ccOwJEX4.s:164    .text.HallInterruptinit:00000000000000c0 $d
+                            *COM*:0000000000000040 HallData
+                            *COM*:0000000000000060 local_hall_params
+                            *COM*:0000000000000040 h_timer_hall
+     /tmp/ccOwJEX4.s:177    .text.HallInterruptSetWheelDiameterInches:0000000000000000 $t
+     /tmp/ccOwJEX4.s:184    .text.HallInterruptSetWheelDiameterInches:0000000000000000 HallInterruptSetWheelDiameterInches
+     /tmp/ccOwJEX4.s:229    .text.HallInterruptSetWheelDiameterInches:0000000000000040 $d
+     /tmp/ccOwJEX4.s:240    .text.HallInterruptSetWheelDiameterMM:0000000000000000 $t
+     /tmp/ccOwJEX4.s:247    .text.HallInterruptSetWheelDiameterMM:0000000000000000 HallInterruptSetWheelDiameterMM
+     /tmp/ccOwJEX4.s:284    .text.HallInterruptSetWheelDiameterMM:0000000000000028 $d
+     /tmp/ccOwJEX4.s:293    .text.HallInterruptReset:0000000000000000 $t
+     /tmp/ccOwJEX4.s:300    .text.HallInterruptReset:0000000000000000 HallInterruptReset
+     /tmp/ccOwJEX4.s:395    .text.HallInterruptReset:0000000000000068 $d
+     /tmp/ccOwJEX4.s:405    .text.HallInterruptReadPosn:0000000000000000 $t
+     /tmp/ccOwJEX4.s:412    .text.HallInterruptReadPosn:0000000000000000 HallInterruptReadPosn
+     /tmp/ccOwJEX4.s:523    .text.HallInterruptReadPosn:0000000000000064 $d
+     /tmp/ccOwJEX4.s:534    .text.HallInterruptsInterrupt:0000000000000000 $t
+     /tmp/ccOwJEX4.s:541    .text.HallInterruptsInterrupt:0000000000000000 HallInterruptsInterrupt
+     /tmp/ccOwJEX4.s:790    .text.HallInterruptsInterrupt:0000000000000180 $d
+     /tmp/ccOwJEX4.s:803    .text.TIM4_IRQHandler:0000000000000000 $t
+     /tmp/ccOwJEX4.s:810    .text.TIM4_IRQHandler:0000000000000000 TIM4_IRQHandler
+     /tmp/ccOwJEX4.s:893    .text.TIM4_IRQHandler:000000000000006c $d
+     /tmp/ccOwJEX4.s:909    .bss.timerwraps:0000000000000000 timerwraps
+     /tmp/ccOwJEX4.s:905    .bss.timerwraps:0000000000000000 $d
+     /tmp/ccOwJEX4.s:912    .data.WheelSize_mm:0000000000000000 $d
+     /tmp/ccOwJEX4.s:916    .data.WheelSize_mm:0000000000000000 WheelSize_mm
+     /tmp/ccOwJEX4.s:919    .rodata.increments:0000000000000000 $d
+     /tmp/ccOwJEX4.s:923    .rodata.increments:0000000000000000 increments
+
+UNDEFINED SYMBOLS
+__aeabi_f2d
+__aeabi_dmul
+__aeabi_ddiv
+__aeabi_d2f
+memset
+HAL_TIM_Base_Init
+HAL_TIM_Base_Start
+HAL_NVIC_SetPriority
+HAL_NVIC_EnableIRQ
+HAL_NVIC_DisableIRQ
+__aeabi_i2f
+__aeabi_f2iz
+__aeabi_fmul
+__aeabi_ui2f
+__aeabi_d2iz
+__aeabi_fdiv
